@@ -24,6 +24,7 @@ jobs:
           - "3.2"
           - "3.3"
           - "3.4"
+          - "4.0"
         exclude:
           # Ruby 2.5 and 2.6 are not available on macos-latest (ARM)
           - os: macos-latest

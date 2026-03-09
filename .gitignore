@@ -14,6 +14,10 @@
 
 /vendor/
 
+# direnv
+/.envrc
+/.direnv
+
 # temporary files
 *~
 *.swp

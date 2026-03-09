@@ -35,7 +35,7 @@
           export PATH="$GEM_HOME/bin:$PATH"
 
           # enable implicitly resolving gems to bundled version
-          export RUBYGEMS_GEMDEPS="$(pwd)/Gemfile.lock"
+          export RUBYGEMS_GEMDEPS="$(pwd)/Gemfile"
         '';
 
         deps = [

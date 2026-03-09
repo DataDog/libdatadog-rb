@@ -13,3 +13,7 @@
 /Gemfile.lock
 
 /vendor/
+
+# temporary files
+*~
+*.swp

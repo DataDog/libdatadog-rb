@@ -18,9 +18,6 @@
         # packages for this system platform
         pkgs = nixpkgs.legacyPackages.${system};
 
-        # control versions
-        ruby = pkgs.ruby_4_0;
-
         hook = ''
           # get major.minor.0 ruby version
           export RUBY_VERSION="$(ruby -e 'puts RUBY_VERSION.gsub(/\d+$/, "0")')"
@@ -50,13 +47,14 @@
 
           shellHook = hook;
         };
-      in {
-        devShells.default = mkRubyDevShell { pkg = ruby; };
+      in rec {
         devShells.ruby40 = mkRubyDevShell { pkg = pkgs.ruby_4_0; };
         devShells.ruby34 = mkRubyDevShell { pkg = pkgs.ruby_3_4; };
         devShells.ruby33 = mkRubyDevShell { pkg = pkgs.ruby_3_3; };
         devShells.ruby32 = mkRubyDevShell { pkg = pkgs.ruby_3_2; };
         devShells.ruby31 = mkRubyDevShell { pkg = pkgs.ruby_3_1; };
+
+        devShells.default = devShells.ruby40;
       }
     );
 }

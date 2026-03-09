@@ -13,3 +13,7 @@
 /Gemfile.lock
 
 vendor/
+
+# direnv
+/.envrc
+/.direnv

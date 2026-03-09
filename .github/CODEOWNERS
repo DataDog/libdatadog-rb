@@ -1,1 +1,5 @@
 * @DataDog/ruby-guild
+
+# Nix
+*.nix @DataDog/nix-guild @DataDog/ruby-guild
+flake.* @DataDog/nix-guild @DataDog/ruby-guild

@@ -1,4 +1,4 @@
-name: Ruby gem scaffolding
+name: Test
 on:
   push:
     branches:

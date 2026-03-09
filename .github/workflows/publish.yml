@@ -1,4 +1,4 @@
-name: Publish Ruby gem
+name: Publish
 on: workflow_dispatch
 
 concurrency: "publish-ruby" # Only one publish job at a time

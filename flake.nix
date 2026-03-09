@@ -13,13 +13,10 @@
     # resolve for all platforms in turn
     flake-utils.lib.eachDefaultSystem (system:
       let
+        basename = "libdatadog-rb";
+
         # packages for this system platform
         pkgs = nixpkgs.legacyPackages.${system};
-
-        # control versions
-        ruby = pkgs.ruby_4_0;
-        llvm = pkgs.llvmPackages_19;
-        gcc = pkgs.gcc14;
 
         hook = ''
           # get major.minor.0 ruby version
@@ -35,72 +32,29 @@
           export PATH="$GEM_HOME/bin:$PATH"
 
           # enable implicitly resolving gems to bundled version
-          export RUBYGEMS_GEMDEPS="$(pwd)/Gemfile.lock"
+          export RUBYGEMS_GEMDEPS="$(pwd)/Gemfile"
         '';
 
         deps = [
-          pkgs.libyaml.dev  # for gem psych
-          pkgs.libffi.dev   # for gem fiddle
-          pkgs.pkg-config   # for dd-trace-rb extconf.rb
-
-          # Rust toolchain for building libdatadog from source
-          pkgs.rustc
-          pkgs.cargo
-
-          # TODO: some gems insist on using `gcc` on Linux, satisfy them for now:
-          # - json
-          # - protobuf
-          # - ruby-prof
-          gcc
+          pkgs.libyaml.dev  # for gem: psych
+          pkgs.libffi.dev   # for gem: fiddle, ffi
         ];
-      in {
-        devShells.default = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
 
-          buildInputs = [ ruby ] ++ deps;
+        mkRubyDevShell = { pkg }: pkgs.stdenv.mkDerivation {
+          name = "${basename}-nix-shell";
 
-          shellHook = hook;
-        };
-
-        devShells.ruby40 = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
-
-          buildInputs = [ pkgs.ruby_4_0 ] ++ deps;
+          buildInputs = [ pkg ] ++ deps;
 
           shellHook = hook;
         };
+      in rec {
+        devShells.ruby40 = mkRubyDevShell { pkg = pkgs.ruby_4_0; };
+        devShells.ruby34 = mkRubyDevShell { pkg = pkgs.ruby_3_4; };
+        devShells.ruby33 = mkRubyDevShell { pkg = pkgs.ruby_3_3; };
+        devShells.ruby32 = mkRubyDevShell { pkg = pkgs.ruby_3_2; };
+        devShells.ruby31 = mkRubyDevShell { pkg = pkgs.ruby_3_1; };
 
-        devShells.ruby34 = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
-
-          buildInputs = [ pkgs.ruby_3_4 ] ++ deps;
-
-          shellHook = hook;
-        };
-
-        devShells.ruby33 = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
-
-          buildInputs = [ pkgs.ruby_3_3 ] ++ deps;
-
-          shellHook = hook;
-        };
-
-        devShells.ruby32 = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
-
-          buildInputs = [ pkgs.ruby_3_2 ] ++ deps;
-
-          shellHook = hook;
-        };
-
-        devShells.ruby31 = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
-
-          buildInputs = [ pkgs.ruby_3_1 ] ++ deps;
-
-          shellHook = hook;
-        };
+        devShells.default = devShells.ruby40;
       }
     );
 }

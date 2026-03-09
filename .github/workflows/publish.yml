@@ -1,13 +1,13 @@
 name: Publish
 on: workflow_dispatch
 
-concurrency: "publish-ruby" # Only one publish job at a time
+concurrency: "publish" # Only one publish job at a time
 
 jobs:
   publish-ruby:
     name: Build and push gem to RubyGems.org
     runs-on: ubuntu-24.04
-    environment: "publish-ruby" # see: https://github.com/datadog/libdatadog/settings/environments
+    environment: "rubygems.org" # see: https://github.com/DataDog/libdatadog-rb/settings/environments
     permissions:
       id-token: write # Required for trusted publishing, see https://github.com/rubygems/release-gem
     steps:

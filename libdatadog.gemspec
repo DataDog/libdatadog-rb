@@ -20,7 +20,7 @@ Gem::Specification.new do |spec|
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/datadog/libdatadog/tree/main/ruby"
+  spec.metadata["source_code_uri"] = "https://github.com/DataDog/libdatadog-rb"
 
   # Require releases on rubygems.org to be coming from multi-factor-auth-authenticated accounts
   spec.metadata["rubygems_mfa_required"] = "true"
@@ -34,7 +34,7 @@ Gem::Specification.new do |spec|
         (f == __FILE__) || f.match(%r{\A(?:(?:bin|test|spec|features|publish)/|\.(?:git|travis|circleci)|appveyor)})
       end
       .reject do |f|
-        [".rspec", ".standard.yml", "Rakefile", "docker-compose.yml", "gems.rb", "README.md"].include?(f)
+        [".rspec", ".standard.yml", "Rakefile", "docker-compose.yml", "Gemfile", "README.md"].include?(f)
       end
       .reject { |f| f.end_with?(".tar.gz") }
   end

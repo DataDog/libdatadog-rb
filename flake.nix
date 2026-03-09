@@ -13,6 +13,8 @@
     # resolve for all platforms in turn
     flake-utils.lib.eachDefaultSystem (system:
       let
+        basename = "libdatadog-rb";
+
         # packages for this system platform
         pkgs = nixpkgs.legacyPackages.${system};
 
@@ -46,54 +48,21 @@
           # - gem: json
           gcc
         ];
+
+        mkRubyDevShell = { pkg }: llvm.stdenv.mkDerivation {
+          name = "${basename}-nix-shell";
+
+          buildInputs = [ pkg ] ++ deps;
+
+          shellHook = hook;
+        };
       in {
-        devShells.default = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
-
-          buildInputs = [ ruby ] ++ deps;
-
-          shellHook = hook;
-        };
-
-        devShells.ruby40 = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
-
-          buildInputs = [ pkgs.ruby_4_0 ] ++ deps;
-
-          shellHook = hook;
-        };
-
-        devShells.ruby34 = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
-
-          buildInputs = [ pkgs.ruby_3_4 ] ++ deps;
-
-          shellHook = hook;
-        };
-
-        devShells.ruby33 = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
-
-          buildInputs = [ pkgs.ruby_3_3 ] ++ deps;
-
-          shellHook = hook;
-        };
-
-        devShells.ruby32 = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
-
-          buildInputs = [ pkgs.ruby_3_2 ] ++ deps;
-
-          shellHook = hook;
-        };
-
-        devShells.ruby31 = llvm.stdenv.mkDerivation {
-          name = "libdatadog-ruby-devshell";
-
-          buildInputs = [ pkgs.ruby_3_1 ] ++ deps;
-
-          shellHook = hook;
-        };
+        devShells.default = mkRubyDevShell { pkg = ruby; };
+        devShells.ruby40 = mkRubyDevShell { pkg = pkgs.ruby_4_0; };
+        devShells.ruby34 = mkRubyDevShell { pkg = pkgs.ruby_3_4; };
+        devShells.ruby33 = mkRubyDevShell { pkg = pkgs.ruby_3_3; };
+        devShells.ruby32 = mkRubyDevShell { pkg = pkgs.ruby_3_2; };
+        devShells.ruby31 = mkRubyDevShell { pkg = pkgs.ruby_3_1; };
       }
     );
 }

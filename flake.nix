@@ -20,8 +20,6 @@
 
         # control versions
         ruby = pkgs.ruby_4_0;
-        llvm = pkgs.llvmPackages_19;
-        gcc = pkgs.gcc14;
 
         hook = ''
           # get major.minor.0 ruby version
@@ -43,13 +41,9 @@
         deps = [
           pkgs.libyaml.dev  # for gem: psych
           pkgs.libffi.dev   # for gem: fiddle, ffi
-
-          # TODO: some bits insist on using `gcc` on Linux, satisfy them for now:
-          # - gem: json
-          gcc
         ];
 
-        mkRubyDevShell = { pkg }: llvm.stdenv.mkDerivation {
+        mkRubyDevShell = { pkg }: pkgs.stdenv.mkDerivation {
           name = "${basename}-nix-shell";
 
           buildInputs = [ pkg ] ++ deps;

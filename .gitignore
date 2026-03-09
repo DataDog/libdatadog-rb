@@ -12,8 +12,12 @@
 
 /Gemfile.lock
 
-vendor/
+/vendor/
 
 # direnv
 /.envrc
 /.direnv
+
+# temporary files
+*~
+*.swp

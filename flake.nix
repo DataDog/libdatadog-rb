@@ -39,18 +39,11 @@
         '';
 
         deps = [
-          pkgs.libyaml.dev  # for gem psych
-          pkgs.libffi.dev   # for gem fiddle
-          pkgs.pkg-config   # for dd-trace-rb extconf.rb
+          pkgs.libyaml.dev  # for gem: psych
+          pkgs.libffi.dev   # for gem: fiddle, ffi
 
-          # Rust toolchain for building libdatadog from source
-          pkgs.rustc
-          pkgs.cargo
-
-          # TODO: some gems insist on using `gcc` on Linux, satisfy them for now:
-          # - json
-          # - protobuf
-          # - ruby-prof
+          # TODO: some bits insist on using `gcc` on Linux, satisfy them for now:
+          # - gem: json
           gcc
         ];
       in {

@@ -1,0 +1,49 @@
+name: Test
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: linux
+            cpu: x86_64
+            base: ubuntu-24.04 # always x86_64-linux-gnu
+          - os: linux
+            cpu: aarch64
+            base: ubuntu-24.04-arm # always aarch64-linux-gnu
+          - os: darwin
+            cpu: arm64
+            base: macos-15 # always arm64-darwin
+        ruby:
+          - version: "2.5"
+          - version: "2.6"
+          - version: "2.7"
+          - version: "3.0"
+          - version: "3.1"
+          - version: "3.2"
+          - version: "3.3"
+          - version: "3.4"
+          - version: "4.0"
+        exclude:
+          # Ruby 2.5 is not available on arm64-darwin
+          - platform:
+              os: darwin
+            ruby:
+              version: "2.5"
+    name: Ruby ${{ matrix.ruby.version }} (${{ matrix.platform.cpu }}-${{ matrix.platform.os }})
+    runs-on: ${{ matrix.platform.base }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # 4.2.2
+      - uses: ruby/setup-ruby@6ca151fd1bfcfd6fe0c4eb6837eb0584d0134a0c # 1.290.0
+        with:
+          ruby-version: ${{ matrix.ruby.version }}
+          bundler-cache: true # runs 'bundle install' and caches installed gems automatically
+      - run: bundle exec rake

@@ -1,0 +1,33 @@
+name: Main
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# Default permissions for all jobs
+permissions: {}
+
+jobs:
+  test:
+    name: Test
+    uses: ./.github/workflows/test.yml
+
+  nix:
+    name: Nix
+    uses: ./.github/workflows/nix.yml
+    permissions:
+      contents: read
+      id-token: write
+
+  complete:
+    name: Main (complete)
+    needs:
+      - test
+      - nix
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "DONE!"

@@ -1,12 +1,8 @@
 name: Test Nix
 
 on: # yamllint disable-line rule:truthy
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_call:
+  workflow_dispatch:
 
 # Default permissions for all jobs
 permissions: {}

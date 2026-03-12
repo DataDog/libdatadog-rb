@@ -34,9 +34,10 @@ Gem::Specification.new do |spec|
         (f == __FILE__) || f.match(%r{\A(?:(?:bin|test|spec|features|publish)/|\.(?:git|travis|circleci)|appveyor)})
       end
       .reject do |f|
-        [".rspec", ".standard.yml", "Rakefile", "docker-compose.yml", "Gemfile", "README.md"].include?(f)
+        [".rspec", ".standard.yml", "Rakefile", "docker-compose.yml", "Gemfile", "README.md", "CONTRIBUTING.md", "LICENSE-3rdparty.yml"].include?(f)
       end
       .reject { |f| f.end_with?(".tar.gz") }
+      .reject { |f| f.end_with?(".nix") || f.start_with?("flake.") }
   end
   spec.require_paths = ["lib"]
 end

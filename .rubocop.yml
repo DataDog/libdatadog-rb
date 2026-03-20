@@ -1,0 +1,37 @@
+require:
+  - standard
+
+plugins:
+  - standard-custom
+  - standard-performance
+  - rubocop-performance
+
+inherit_gem:
+  standard: config/base.yml
+  standard-custom: config/base.yml
+  standard-performance: config/base.yml
+
+AllCops:
+  SuggestExtensions: false
+
+# Tuned from standardrb defaults
+
+Layout/ExtraSpacing:
+  Enabled: true
+  AllowForAlignment: true
+
+Layout/HashAlignment:
+  Enabled: true
+  EnforcedHashRocketStyle: [key, table]
+
+Style/StringLiterals:
+  Enabled: true
+  EnforcedStyle: single_quotes
+
+Style/StringLiteralsInInterpolation:
+  Enabled: true
+  EnforcedStyle: single_quotes
+
+Style/TrailingCommaInHashLiteral:
+  Enabled: true
+  EnforcedStyleForMultiline: consistent_comma

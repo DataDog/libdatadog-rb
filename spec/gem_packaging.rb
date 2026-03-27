@@ -36,7 +36,7 @@ RSpec.describe "gem release process (after packaging)" do
 
   it "prefixes all public symbols in .so files" do
     so_files = Dir.glob("vendor/libdatadog-#{Libdatadog::LIB_VERSION}/**/*.so")
-    expect(so_files.size).to be 4
+    expect(so_files.size).to be >= 1
 
     so_files.each do |so_file|
       raw_symbols = `nm -D --defined-only #{so_file}`

@@ -75,6 +75,7 @@ RSpec.describe Libdatadog do
       context "for the current platform" do
         let(:current_platform) do
           platform = Gem::Platform.local.to_s
+          platform = platform[0..-5] if platform.end_with?("-gnu")
           platform.include?("darwin") ? "arm64-darwin" : platform
         end
         let(:pkgconfig_folder) { "#{temporary_directory}/#{current_platform}/some/folder/containing/the/lib/pkgconfig" }

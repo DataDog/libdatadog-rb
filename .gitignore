@@ -13,6 +13,7 @@
 /Gemfile.lock
 
 /vendor/
+/ext/
 
 # direnv
 /.envrc
@@ -21,3 +22,6 @@
 # temporary files
 *~
 *.swp
+
+#Rust target direcory
+/target

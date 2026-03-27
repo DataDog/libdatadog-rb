@@ -4,8 +4,8 @@ require "bundler/gem_tasks"
 require "rspec/core/rake_task"
 require "standard/rake" unless RUBY_VERSION < "2.6"
 
+require "etc"
 require "fileutils"
-require "http" unless RUBY_VERSION < "2.5"
 require "pry"
 require "rubygems/package"
 
@@ -19,107 +19,118 @@ unless LIB_VERSION_TO_PACKAGE.start_with?(Libdatadog::LIB_VERSION)
     "`LIB_VERSION` setting in <lib/libdatadog/version.rb> (#{Libdatadog::LIB_VERSION})"
 end
 
-LIB_GITHUB_RELEASES = [
-  {
-    file: "libdatadog-aarch64-alpine-linux-musl.tar.gz",
-    sha256: "43b0af54fe43512f17e71a1534c9d524c13a5cff01124ca0f89c1e7ccb0205f3",
-    ruby_platform: "aarch64-linux-musl"
-  },
-  {
-    file: "libdatadog-aarch64-unknown-linux-gnu.tar.gz",
-    sha256: "cd39a8599d1335594644debd13bb2b60c9995c9643da41753c847f52e13c619c",
-    ruby_platform: "aarch64-linux"
-  },
-  {
-    file: "libdatadog-x86_64-alpine-linux-musl.tar.gz",
-    sha256: "0d1b09d6653b121464b433f4d3b6947c76491d444fe1f68f22d14fe38e400649",
-    ruby_platform: "x86_64-linux-musl"
-  },
-  {
-    file: "libdatadog-x86_64-unknown-linux-gnu.tar.gz",
-    sha256: "bba2c16867d81575510abc046f7e3de125c1ca7b975d7b1cd51ce6f0507859a9",
-    ruby_platform: "x86_64-linux"
-  },
-  {
-    file: "libdatadog-aarch64-apple-darwin.tar.gz",
-    sha256: "4b54a4b0b4f7acc22b9a42786ce4bc1888024848ba345b011cab19ba73693bfa",
-    ruby_platform: "arm64-darwin"
-  }
-]
+RUST_TRIPLE_TO_RUBY_PLATFORM = {
+  "x86_64-unknown-linux-gnu" => "x86_64-linux",
+  "x86_64-unknown-linux-musl" => "x86_64-linux-musl",
+  "aarch64-unknown-linux-gnu" => "aarch64-linux",
+  "aarch64-unknown-linux-musl" => "aarch64-linux-musl",
+  "aarch64-apple-darwin" => "arm64-darwin",
+  "x86_64-apple-darwin" => "arm64-darwin"
+}.freeze
 
 task default: [
   :spec,
   (:standard unless RUBY_VERSION < "2.6")
 ].compact
 
-desc "Download lib release from github"
-task :fetch do
-  Helpers.each_github_release_variant do |file:, sha256:, target_directory:, target_file:, **_|
-    target_url = "https://github.com/datadog/libdatadog/releases/download/v#{LIB_VERSION_TO_PACKAGE}/#{file}"
+desc "Build libdatadog FFI library from source using the builder crate"
+task :build_ffi do
+  rustc_output = `rustc -vV`
+  raise "rustc not found or failed" unless $?.success?
 
-    if File.exist?(target_file)
-      target_file_hash = Digest::SHA256.hexdigest(File.read(target_file))
-
-      if target_file_hash == sha256
-        puts "Found #{target_file} matching the expected sha256, skipping download"
-        next
-      else
-        puts "Found #{target_file} with hash (#{target_file_hash}) BUT IT DID NOT MATCH THE EXPECTED sha256 (#{sha256}), downloading it again..."
-      end
-    end
-
-    puts "Going to download #{target_url} into #{target_file}"
-
-    File.open(target_file, "wb") do |file|
-      HTTP.follow.get(target_url).body.each { |chunk| file.write(chunk) }
-    end
-
-    if Digest::SHA256.hexdigest(File.read(target_file)) == sha256
-      puts "Success!"
-    else
-      raise "Downloaded file is corrupt, does not match expected sha256"
-    end
+  host_triple = rustc_output.match(/^host:\s*(.+)$/)[1].strip
+  ruby_platform = RUST_TRIPLE_TO_RUBY_PLATFORM.fetch(host_triple) do
+    raise "Unsupported host triple: #{host_triple}"
   end
+
+  target_directory = File.expand_path("vendor/libdatadog-#{Libdatadog::LIB_VERSION}/#{ruby_platform}")
+  FileUtils.mkdir_p(target_directory)
+
+  install_root = File.expand_path("ext/release-bin")
+  features = ENV["LIBDATADOG_FEATURES"]
+  source_path = ENV["LIBDATADOG_SOURCE_PATH"]
+
+  install_cmd = if source_path
+    [
+      "cargo", "install",
+      "--path", File.join(source_path, "builder"),
+      "--bin", "release",
+      "--root", install_root,
+      "--force"
+    ]
+  else
+    [
+      "cargo", "install",
+      "--git", "https://github.com/DataDog/libdatadog",
+      "--tag", "v#{Libdatadog::LIB_VERSION}",
+      "--bin", "release",
+      "--root", install_root,
+      "--force",
+      "builder"
+    ]
+  end
+
+  if features
+    install_cmd += ["--no-default-features", "--features", features]
+  end
+
+  feature_info = features ? " with features=#{features}" : ""
+  puts "Installing libdatadog builder (#{source_path ? "from #{source_path}" : "v#{Libdatadog::LIB_VERSION} from GitHub"}#{feature_info})..."
+  system(*install_cmd) || raise("cargo install failed")
+
+  # Build env vars required by the cmake crate and cargo sub-invocations inside the builder
+  cargo_target_dir = File.expand_path("ext/cargo-target")
+  out_dir = File.expand_path("ext/cmake-out")
+  FileUtils.mkdir_p(cargo_target_dir)
+  FileUtils.mkdir_p(out_dir)
+  num_jobs = begin
+    Etc.nprocessors.to_s
+  rescue
+    "1"
+  end
+
+  env = {
+    "PROFILE" => "release",
+    "OPT_LEVEL" => "3",
+    "DEBUG" => "false",
+    "HOST" => host_triple,
+    "TARGET" => host_triple,
+    "NUM_JOBS" => num_jobs,
+    "OUT_DIR" => out_dir,
+    "CARGO_PKG_VERSION" => Libdatadog::LIB_VERSION,
+    "CARGO_TARGET_DIR" => cargo_target_dir
+  }
+
+  binary = File.join(install_root, "bin", "release")
+  puts "Building libdatadog for #{ruby_platform} (#{host_triple})"
+  puts "Output: #{target_directory}"
+
+  system(env, binary, "--out", target_directory) || raise("Builder failed")
+
+  Helpers.fix_file_permissions(target_directory)
 end
 
-desc "Extract lib downloaded releases"
-task extract: [:fetch] do
-  Helpers.each_github_release_variant do |target_directory:, target_file:, **_|
-    puts "Extracting #{target_file}"
-    File.open(target_file, "rb") do |file|
-      Gem::Package.new("").extract_tar_gz(file, target_directory)
-    end
-
-    # Fix file permissions after extraction
-    puts "Fixing file permissions in #{target_directory}"
-    Helpers.fix_file_permissions(target_directory)
-  end
-end
-
-desc "Package lib downloaded releases as gems"
+desc "Package lib built releases as gems"
 task package: [
   :spec,
   (:"standard:fix" unless RUBY_VERSION < "2.6"),
-  :extract
+  :build_ffi
 ] do
   gemspec = eval(File.read("libdatadog.gemspec"), nil, "libdatadog.gemspec") # standard:disable Security/Eval
   FileUtils.mkdir_p("pkg")
 
-  # Fallback package with all binaries
-  # This package will get used by (1) platforms that have no matching `ruby_platform` or (2) that have set
-  # "BUNDLE_FORCE_RUBY_PLATFORM" (or its equivalent via code) to avoid precompiled gems.
-  # In a previous version of libdatadog, this package had no binaries, but that could mean that we broke customers in case (2).
-  # For customers in case (1), this package is a no-op, and dd-trace-rb will correctly detect and warn that
-  # there are no valid binaries for the platform.
-  Helpers.package_for(gemspec, ruby_platform: nil, files: Helpers.files_for("x86_64-linux", "x86_64-linux-musl", "aarch64-linux", "aarch64-linux-musl", "arm64-darwin"))
+  built_platforms = Dir.glob("vendor/libdatadog-#{Libdatadog::LIB_VERSION}/*/").map { |d| File.basename(d) }
+  raise "No built platforms found in vendor/" if built_platforms.empty?
 
-  # We include both glibc and musl variants in the same binary gem to avoid the issues
-  # documented in https://github.com/rubygems/rubygems/issues/3174
-  Helpers.package_for(gemspec, ruby_platform: "x86_64-linux", files: Helpers.files_for("x86_64-linux", "x86_64-linux-musl"))
-  Helpers.package_for(gemspec, ruby_platform: "aarch64-linux", files: Helpers.files_for("aarch64-linux", "aarch64-linux-musl"))
+  Helpers.fix_file_permissions_for_gem(gemspec.files)
 
-  # macOS package (Apple Silicon)
-  Helpers.package_for(gemspec, ruby_platform: "arm64-darwin", files: Helpers.files_for("arm64-darwin"))
+  # Fallback package with all built binaries
+  Helpers.package_for(gemspec, ruby_platform: nil, files: Helpers.files_for(*built_platforms))
+
+  # Platform-specific gem for each built platform
+  built_platforms.each do |platform|
+    Helpers.package_for(gemspec, ruby_platform: platform, files: Helpers.files_for(platform))
+  end
 end
 
 Rake::Task["package"].enhance { Rake::Task["spec_validate_permissions"].execute }
@@ -136,12 +147,8 @@ task push_to_rubygems: [
   :package,
   :"release:guard_clean"
 ] do
-  [
-    "gem push pkg/libdatadog-#{Libdatadog::VERSION}.gem",
-    "gem push pkg/libdatadog-#{Libdatadog::VERSION}-x86_64-linux.gem",
-    "gem push pkg/libdatadog-#{Libdatadog::VERSION}-aarch64-linux.gem",
-    "gem push pkg/libdatadog-#{Libdatadog::VERSION}-arm64-darwin.gem"
-  ].each do |command|
+  Dir.glob("pkg/libdatadog-#{Libdatadog::VERSION}*.gem").each do |gem_file|
+    command = "gem push #{gem_file}"
     puts "Running: #{command}"
     abort unless system(command)
   end
@@ -151,22 +158,6 @@ module Helpers
   # Files that should have executable permissions (755) in the gem
   # Note: .so for Linux, .dylib for macOS
   EXECUTABLE_FILES = ["libdatadog-crashtracking-receiver", "libdatadog_profiling.so", "libdatadog_profiling.dylib"].freeze
-
-  def self.each_github_release_variant
-    LIB_GITHUB_RELEASES.each do |variant|
-      file = variant.fetch(:file)
-      sha256 = variant.fetch(:sha256)
-      ruby_platform = variant.fetch(:ruby_platform)
-
-      # These two are so common that we just centralize them here
-      target_directory = "vendor/libdatadog-#{Libdatadog::LIB_VERSION}/#{ruby_platform}"
-      target_file = "#{target_directory}/#{file}"
-
-      FileUtils.mkdir_p(target_directory)
-
-      yield(file: file, sha256: sha256, ruby_platform: ruby_platform, target_directory: target_directory, target_file: target_file)
-    end
-  end
 
   def self.package_for(gemspec, ruby_platform:, files:)
     target_gemspec = gemspec.dup
@@ -179,6 +170,21 @@ module Helpers
     package = Gem::Package.build(target_gemspec)
     FileUtils.mv(package, "pkg")
     puts("-" * 80)
+  end
+
+  def self.fix_file_permissions_for_gem(files)
+    files.each do |path|
+      next unless File.file?(path)
+
+      filename = File.basename(path)
+      current_permissions = File.stat(path).mode & 0o777
+      expected = EXECUTABLE_FILES.include?(filename) ? 0o755 : 0o644
+
+      if current_permissions != expected
+        puts "Fixing permissions for #{path}: #{current_permissions.to_s(8)} -> #{expected.to_s(8)}"
+        FileUtils.chmod(expected, path)
+      end
+    end
   end
 
   def self.fix_file_permissions(directory)
@@ -213,15 +219,13 @@ module Helpers
   )
     files = []
 
-    each_github_release_variant do |ruby_platform:, target_directory:, target_file:, **_|
-      next unless included_platforms.include?(ruby_platform)
-
-      downloaded_release_tarball = target_file
+    included_platforms.each do |platform|
+      dir = "vendor/libdatadog-#{Libdatadog::LIB_VERSION}/#{platform}"
+      next unless Dir.exist?(dir)
 
       files +=
-        Dir.glob("#{target_directory}/**/*")
+        Dir.glob("#{dir}/**/*")
           .select { |path| File.file?(path) }
-          .reject { |path| path == downloaded_release_tarball }
           .reject { |path| excluded_files.include?(File.basename(path)) }
     end
 

@@ -51,6 +51,13 @@ namespace :libdatadog do
     puts '=' * 72
     puts
 
+    # TODO: cbindgen header generation is driven by each FFI crate's build.rs,
+    # but cargo only reruns build.rs when build.rs itself or cbindgen.toml
+    # changes — not when the Rust source files change.  This means incremental
+    # builds can leave stale generated headers in target/include/datadog/.
+    # A workaround is to delete the cached headers before building, but a
+    # proper fix would be to add appropriate `cargo:rerun-if-changed` directives
+    # in libdatadog's build-common/src/cbindgen.rs.
     Libdatadog::Cargo.build
   end
 

@@ -22,27 +22,27 @@ end
 LIB_GITHUB_RELEASES = [
   {
     file: "libdatadog-aarch64-alpine-linux-musl.tar.gz",
-    sha256: "e328be357c13ecacd0dbca897b4b814324d3d6c1ae8bc955a34af30111766858",
+    sha256: "43b0af54fe43512f17e71a1534c9d524c13a5cff01124ca0f89c1e7ccb0205f3",
     ruby_platform: "aarch64-linux-musl"
   },
   {
     file: "libdatadog-aarch64-unknown-linux-gnu.tar.gz",
-    sha256: "f21dd13ac41d918e8c084df6b3e080fed61690e2993831a2768340019e04de7b",
+    sha256: "cd39a8599d1335594644debd13bb2b60c9995c9643da41753c847f52e13c619c",
     ruby_platform: "aarch64-linux"
   },
   {
     file: "libdatadog-x86_64-alpine-linux-musl.tar.gz",
-    sha256: "6ef7145e36e0a0bb62b6246f8e8b4d80459e2137099be9799cde0d4d25ca1eb7",
+    sha256: "0d1b09d6653b121464b433f4d3b6947c76491d444fe1f68f22d14fe38e400649",
     ruby_platform: "x86_64-linux-musl"
   },
   {
     file: "libdatadog-x86_64-unknown-linux-gnu.tar.gz",
-    sha256: "5545de95333d19157960c31aa38e1ac87f8d7fdf597a5c014db5ea8dbfe3614c",
+    sha256: "bba2c16867d81575510abc046f7e3de125c1ca7b975d7b1cd51ce6f0507859a9",
     ruby_platform: "x86_64-linux"
   },
   {
     file: "libdatadog-aarch64-apple-darwin.tar.gz",
-    sha256: "e310cb010f5de7c109e08252b466ab633bf6a10efe7df99f464ca7b90472f69d",
+    sha256: "4b54a4b0b4f7acc22b9a42786ce4bc1888024848ba345b011cab19ba73693bfa",
     ruby_platform: "arm64-darwin"
   }
 ]

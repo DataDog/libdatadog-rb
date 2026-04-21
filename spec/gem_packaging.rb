@@ -39,9 +39,17 @@ RSpec.describe "gem release process (after packaging)" do
     expect(shared_lib_files.size).to be >= 1
 
     shared_lib_files.each do |shared_lib_file|
-      raw_symbols = `nm -D --defined-only #{shared_lib_file}`
+      # macOS nm doesn't use a dynamic symbol table (-D); use -g (global) instead
+      nm_flags = shared_lib_file.end_with?(".dylib") ? "-g --defined-only" : "-D --defined-only"
+      raw_symbols = `nm #{nm_flags} #{shared_lib_file}`
 
-      symbols = raw_symbols.split("\n").map { |symbol| symbol.split(" ").last.downcase.sub(/\A_/, "") }.sort
+      # macOS nm prefixes C symbols with "_"; strip it for consistent matching.
+      # Linker-injected symbols (e.g. __mh_dylib_header) have two leading underscores and
+      # still start with "_" after stripping one — reject them to avoid false failures.
+      symbols = raw_symbols.split("\n")
+        .map { |symbol| symbol.split(" ").last.downcase.sub(/\A_/, "") }
+        .reject { |sym| sym.start_with?("_") }
+        .sort
       expect(symbols.size).to be > 20 # Quick sanity check
       expect(symbols).to all(
         start_with("ddog_").or(start_with("blaze_"))

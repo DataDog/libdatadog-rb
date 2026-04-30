@@ -16,6 +16,12 @@ jobs:
     name: Test
     uses: ./.github/workflows/test.yml
 
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    permissions:
+      contents: read
+
   nix:
     name: Nix
     uses: ./.github/workflows/nix.yml
@@ -23,10 +29,37 @@ jobs:
       contents: read
       id-token: write
 
+  package:
+    name: Package
+    needs:
+      - test
+      - build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@3ff19f5e2baf30647122352b96108b1fbe250c64 # 1.299.0
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - name: Download all FFI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ffi-*
+          path: vendor/
+          merge-multiple: true
+      - name: Package and validate gems
+        run: bundle exec rake package
+
   complete:
     name: Main (complete)
     needs:
       - test
+      - build
+      - package
       - nix
     runs-on: ubuntu-24.04
     steps:

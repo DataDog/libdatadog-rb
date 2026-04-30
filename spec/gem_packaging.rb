@@ -6,6 +6,14 @@ require "rubygems/package/tar_reader"
 require "libdatadog"
 require "zlib"
 
+SUPPORTED_RUBY_PLATFORMS = %w[
+  x86_64-linux
+  x86_64-linux-musl
+  aarch64-linux
+  aarch64-linux-musl
+  arm64-darwin
+].freeze
+
 RSpec.describe "gem release process (after packaging)" do
   let(:gem_version) { Libdatadog::VERSION }
   let(:packaged_gem_file) { "pkg/libdatadog-#{gem_version}.gem" }
@@ -30,6 +38,17 @@ RSpec.describe "gem release process (after packaging)" do
               "expected #{expected_permissions})"
           end
         end
+      end
+    end
+  end
+
+  context "when running in CI" do
+    before { skip "Only validated in CI where all platforms are built" unless ENV["CI"] }
+
+    it "packages gems for all supported platforms" do
+      SUPPORTED_RUBY_PLATFORMS.each do |platform|
+        gem_file = "pkg/libdatadog-#{gem_version}-#{platform}.gem"
+        expect(File).to exist(gem_file), "Missing platform gem: #{gem_file}"
       end
     end
   end

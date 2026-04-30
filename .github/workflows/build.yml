@@ -1,0 +1,137 @@
+name: Build
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+# Default permissions for all jobs
+permissions: {}
+
+jobs:
+  build-glibc:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            rust_target: x86_64-unknown-linux-gnu
+            ruby_platform: x86_64-linux
+            container: quay.io/pypa/manylinux2014_x86_64
+          - runner: ubuntu-24.04-arm
+            rust_target: aarch64-unknown-linux-gnu
+            ruby_platform: aarch64-linux
+            container: quay.io/pypa/manylinux2014_aarch64
+    name: Build (${{ matrix.ruby_platform }})
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    permissions:
+      contents: read
+    steps:
+      - name: Install system dependencies
+        run: yum install -y git curl openssl-devel readline-devel zlib-devel libffi-devel bzip2
+      - name: Restore Ruby cache
+        id: cache-ruby
+        uses: actions/cache@v4
+        with:
+          path: /opt/ruby-3.4.2
+          key: ruby-3.4.2-manylinux2014-${{ matrix.rust_target }}
+      - name: Install Ruby 3.4.2
+        if: steps.cache-ruby.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth=1 https://github.com/rbenv/ruby-build.git /tmp/ruby-build
+          /tmp/ruby-build/install.sh
+          ruby-build 3.4.2 /opt/ruby-3.4.2
+      - name: Add Ruby to PATH
+        run: echo "/opt/ruby-3.4.2/bin" >> $GITHUB_PATH
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - name: Restore cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ matrix.rust_target }}-${{ hashFiles('lib/libdatadog/version.rb') }}
+          restore-keys: cargo-${{ matrix.rust_target }}-
+      - name: Install bundler and gems
+        run: gem install bundler --no-document && bundle install
+      - name: Build FFI
+        run: bundle exec rake build_ffi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffi-${{ matrix.ruby_platform }}
+          path: vendor/
+
+  build-musl:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            rust_target: x86_64-unknown-linux-musl
+            ruby_platform: x86_64-linux-musl
+          - runner: ubuntu-24.04-arm
+            rust_target: aarch64-unknown-linux-musl
+            ruby_platform: aarch64-linux-musl
+    name: Build (${{ matrix.ruby_platform }})
+    runs-on: ${{ matrix.runner }}
+    container: alpine:latest
+    permissions:
+      contents: read
+    steps:
+      - name: Install system dependencies
+        run: apk add --no-cache git ruby ruby-dev build-base rust cargo cmake
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - name: Install bundler and gems
+        run: gem install bundler && bundle install
+      - name: Build FFI
+        run: bundle exec rake build_ffi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffi-${{ matrix.ruby_platform }}
+          path: vendor/
+
+  build-darwin:
+    name: Build (arm64-darwin)
+    runs-on: macos-15 # always arm64-darwin
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@3ff19f5e2baf30647122352b96108b1fbe250c64 # 1.299.0
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-arm64-darwin-${{ hashFiles('lib/libdatadog/version.rb') }}
+          restore-keys: cargo-arm64-darwin-
+      - run: bundle exec rake build_ffi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffi-arm64-darwin
+          path: vendor/
+
+  complete:
+    name: Build (complete)
+    runs-on: ubuntu-24.04
+    needs:
+      - build-glibc
+      - build-musl
+      - build-darwin
+    steps:
+      - run: echo "DONE!"

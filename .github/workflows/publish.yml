@@ -1,24 +1,67 @@
 name: Publish
-on: workflow_dispatch
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
 
 concurrency: "publish" # Only one publish job at a time
 
 jobs:
-  publish-ruby:
-    name: Build and push gem to RubyGems.org
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    permissions:
+      contents: read
+
+  package:
+    name: Package
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@3ff19f5e2baf30647122352b96108b1fbe250c64 # 1.299.0
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - name: Download all FFI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ffi-*
+          path: vendor/
+          merge-multiple: true
+      - name: Package gems
+        run: bundle exec rake package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gems
+          path: pkg/
+
+  publish:
+    name: Publish to RubyGems.org
+    needs: package
     runs-on: ubuntu-24.04
     environment: "rubygems.org" # see: https://github.com/DataDog/libdatadog-rb/settings/environments
     permissions:
+      contents: read
       id-token: write # Required for trusted publishing, see https://github.com/rubygems/release-gem
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@3ff19f5e2baf30647122352b96108b1fbe250c64 # 1.299.0
         with:
-          ruby-version: "4.0"
+          persist-credentials: false
+      - uses: ruby/setup-ruby@3ff19f5e2baf30647122352b96108b1fbe250c64 # 1.299.0
+        with:
+          ruby-version: "3.4"
           bundler-cache: true
-      - name: Install dependencies
-        run: bundle install
-      - name: Fetch release artifacts
-        run: bundle exec rake fetch_release_artifacts
+      - name: Download packaged gems
+        uses: actions/download-artifact@v4
+        with:
+          name: gems
+          path: pkg/
       - uses: rubygems/release-gem@e9a6361a0b14562539327c2a02373edc56dd3169 # v1.1.4
+        with:
+          rake-task: push_gems

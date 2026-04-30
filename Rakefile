@@ -27,8 +27,7 @@ RUST_TRIPLE_TO_RUBY_PLATFORM = {
   "x86_64-unknown-linux-musl" => "x86_64-linux-musl",
   "aarch64-unknown-linux-gnu" => "aarch64-linux",
   "aarch64-unknown-linux-musl" => "aarch64-linux-musl",
-  "aarch64-apple-darwin" => "arm64-darwin",
-  "x86_64-apple-darwin" => "arm64-darwin"
+  "aarch64-apple-darwin" => "arm64-darwin"
 }.freeze
 
 # Maps each supported Ruby platform to its GitHub release asset name (without .tar.gz).
@@ -52,14 +51,15 @@ task :build_ffi do
   raise "rustc not found or failed" unless $?.success?
 
   host_triple = rustc_output.match(/^host:\s*(.+)$/)[1].strip
-  ruby_platform = RUST_TRIPLE_TO_RUBY_PLATFORM.fetch(host_triple) do
-    raise "Unsupported host triple: #{host_triple}"
+  target_triple = ENV["RUST_TARGET"] || host_triple
+  ruby_platform = RUST_TRIPLE_TO_RUBY_PLATFORM.fetch(target_triple) do
+    raise "Unsupported target triple: #{target_triple}"
   end
 
   target_directory = File.expand_path("build/libdatadog-#{Libdatadog::LIB_VERSION}/#{ruby_platform}")
   FileUtils.mkdir_p(target_directory)
 
-  install_root = File.expand_path("ext/release-bin")
+  install_root = File.expand_path("build/release-bin")
   features = ENV["LIBDATADOG_FEATURES"]
   source_path = ENV["LIBDATADOG_SOURCE_PATH"]
 
@@ -92,8 +92,8 @@ task :build_ffi do
   system(*install_cmd) || raise("cargo install failed")
 
   # Build env vars required by the cmake crate and cargo sub-invocations inside the builder
-  cargo_target_dir = File.expand_path("ext/cargo-target")
-  out_dir = File.expand_path("ext/cmake-out")
+  cargo_target_dir = File.expand_path("build/cargo-target")
+  out_dir = File.expand_path("build/cmake-out")
   FileUtils.mkdir_p(cargo_target_dir)
   FileUtils.mkdir_p(out_dir)
   num_jobs = begin
@@ -107,7 +107,7 @@ task :build_ffi do
     "OPT_LEVEL" => "3",
     "DEBUG" => "false",
     "HOST" => host_triple,
-    "TARGET" => host_triple,
+    "TARGET" => target_triple,
     "NUM_JOBS" => num_jobs,
     "OUT_DIR" => out_dir,
     "CARGO_PKG_VERSION" => Libdatadog::LIB_VERSION,
@@ -115,7 +115,7 @@ task :build_ffi do
   }
 
   binary = File.join(install_root, "bin", "release")
-  puts "Building libdatadog for #{ruby_platform} (#{host_triple})"
+  puts "Building libdatadog for #{ruby_platform} (host: #{host_triple}, target: #{target_triple})"
   puts "Output: #{target_directory}"
 
   system(env, binary, "--out", target_directory) || raise("Builder failed")
@@ -176,6 +176,13 @@ task :spec_validate_permissions do
   RSpec.world.reset # If any other tests ran before, flushes them
   ret = RSpec::Core::Runner.run(["spec/gem_packaging.rb"])
   raise "Release tests failed! See error output above." if ret != 0
+end
+
+desc "Push pre-built gems to RubyGems (for CI use, skips guard_clean)"
+task :push_gems do
+  Dir.glob("pkg/libdatadog-#{Libdatadog::VERSION}*.gem").each do |gem_file|
+    system("gem push #{gem_file}") || abort("Failed to push #{gem_file}")
+  end
 end
 
 desc "Release all packaged gems"

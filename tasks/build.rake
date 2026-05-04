@@ -21,8 +21,10 @@ module BuildFromSource
           output = `rustc -vV`
           raise "rustc not found or failed" unless $?.success?
 
-          triple = output[/^host:\s*(.+)$/, 1]&.strip
+          triple = output[/^host:\s*(.+)$/, 1]
           raise "Could not determine host triple from rustc output" unless triple
+
+          triple = triple.strip
 
           triple
         end
@@ -117,7 +119,11 @@ module BuildFromSource
           "CARGO_PKG_VERSION" => Libdatadog::LIB_VERSION,
           "CARGO_TARGET_DIR" => Paths.cargo_target.to_s,
           "OUT_DIR" => Paths.cmake_out.to_s,
-          "NUM_JOBS" => (Etc.nprocessors rescue 1).to_s
+          "NUM_JOBS" => begin
+            Etc.nprocessors
+          rescue
+            1
+          end.to_s
         }
       end
     end

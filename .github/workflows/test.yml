@@ -43,5 +43,7 @@ jobs:
           ruby-version: ${{ matrix.ruby.version }}
           bundler-cache: true # runs 'bundle install' and caches installed gems automatically
       - run: bundle exec rake
+      - run: bundle exec rake extract
+        if: ${{ matrix.ruby.version == '4.0' }}
       - run: bundle exec rake package
         if: ${{ matrix.ruby.version == '4.0' }}

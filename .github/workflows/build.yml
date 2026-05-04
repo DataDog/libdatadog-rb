@@ -1,0 +1,82 @@
+name: Build
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - ruby_platform: x86_64-linux
+            base: ubuntu-24.04
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-gnu-gcc
+          - ruby_platform: x86_64-linux-musl
+            base: ubuntu-24.04
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-musl-gcc
+          - ruby_platform: aarch64-linux
+            base: ubuntu-24.04-arm
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-gnu-gcc
+          - ruby_platform: aarch64-linux-musl
+            base: ubuntu-24.04-arm
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-musl-gcc
+    name: Build (${{ matrix.platform.ruby_platform }})
+    runs-on: ${{ matrix.platform.base }}
+    container:
+      image: ${{ matrix.platform.image }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - run: bundle install
+      - uses: ./.github/actions/build
+      - name: Upload vendor artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vendor-${{ matrix.platform.ruby_platform }}
+          path: vendor/
+
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - ruby_platform: arm64-darwin
+            base: macos-15
+    name: Build (${{ matrix.platform.ruby_platform }})
+    runs-on: ${{ matrix.platform.base }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ruby/setup-ruby@7372622e62b60b3cb750dcd2b9e32c247ffec26a # v1.302.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - uses: ./.github/actions/build
+      - name: Upload vendor artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vendor-${{ matrix.platform.ruby_platform }}
+          path: vendor/
+
+  package:
+    name: Package
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ruby/setup-ruby@7372622e62b60b3cb750dcd2b9e32c247ffec26a # v1.302.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Download all vendor artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: vendor-*
+          path: vendor/
+          merge-multiple: true
+      - name: Package gems
+        run: bundle exec rake package
+      - name: Upload gems
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gems
+          path: pkg/*.gem

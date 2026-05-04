@@ -234,3 +234,6 @@ task(:build) { raise "Build task is disabled, use package instead" }
 
 Rake::Task["release"].clear
 task(:release) { Rake::Task["push_to_rubygems"].invoke }
+
+# Load additional tasks
+Dir.glob("tasks/**/*.rake").each { |r| import r }

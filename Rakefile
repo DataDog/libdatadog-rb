@@ -66,7 +66,7 @@ task build_ffi: :check_rust_toolchain do
   target_directory = File.expand_path("build/libdatadog-#{Libdatadog::LIB_VERSION}/#{ruby_platform}")
   FileUtils.mkdir_p(target_directory)
 
-  install_root = File.expand_path("ext/release-bin")
+  install_root = File.expand_path("build/release-bin")
   features = ENV["LIBDATADOG_FEATURES"]
   source_path = ENV["LIBDATADOG_SOURCE_PATH"]
 
@@ -99,8 +99,8 @@ task build_ffi: :check_rust_toolchain do
   system(*install_cmd) || raise("cargo install failed")
 
   # Build env vars required by the cmake crate and cargo sub-invocations inside the builder
-  cargo_target_dir = File.expand_path("ext/cargo-target")
-  out_dir = File.expand_path("ext/cmake-out")
+  cargo_target_dir = File.expand_path("build/cargo-target")
+  out_dir = File.expand_path("build/cmake-out")
   FileUtils.mkdir_p(cargo_target_dir)
   FileUtils.mkdir_p(out_dir)
   num_jobs = begin

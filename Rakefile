@@ -6,8 +6,11 @@ require "standard/rake" unless RUBY_VERSION < "2.6"
 
 require "etc"
 require "fileutils"
+require "net/http"
 require "pry"
 require "rubygems/package"
+require "tmpdir"
+require "uri"
 
 RSpec::Core::RakeTask.new(:spec)
 
@@ -28,6 +31,16 @@ RUST_TRIPLE_TO_RUBY_PLATFORM = {
   "x86_64-apple-darwin" => "arm64-darwin"
 }.freeze
 
+# Maps each supported Ruby platform to its GitHub release asset name (without .tar.gz).
+# Asset names use the Rust triple as released at https://github.com/DataDog/libdatadog/releases.
+RUBY_PLATFORM_TO_RELEASE_ASSET = {
+  "x86_64-linux" => "libdatadog-x86_64-unknown-linux-gnu",
+  "x86_64-linux-musl" => "libdatadog-x86_64-alpine-linux-musl",
+  "aarch64-linux" => "libdatadog-aarch64-unknown-linux-gnu",
+  "aarch64-linux-musl" => "libdatadog-aarch64-alpine-linux-musl",
+  "arm64-darwin" => "libdatadog-aarch64-apple-darwin"
+}.freeze
+
 task default: [
   :spec,
   (:standard unless RUBY_VERSION < "2.6")
@@ -43,7 +56,7 @@ task :build_ffi do
     raise "Unsupported host triple: #{host_triple}"
   end
 
-  target_directory = File.expand_path("vendor/libdatadog-#{Libdatadog::LIB_VERSION}/#{ruby_platform}")
+  target_directory = File.expand_path("build/libdatadog-#{Libdatadog::LIB_VERSION}/#{ruby_platform}")
   FileUtils.mkdir_p(target_directory)
 
   install_root = File.expand_path("ext/release-bin")
@@ -110,27 +123,50 @@ task :build_ffi do
   Helpers.fix_file_permissions(target_directory)
 end
 
-desc "Package lib built releases as gems"
+desc "Download all platform release artifacts from GitHub into vendor/"
+task :fetch_release_artifacts do
+  version = Libdatadog::LIB_VERSION
+
+  RUBY_PLATFORM_TO_RELEASE_ASSET.each do |ruby_platform, asset_name|
+    url = "https://github.com/DataDog/libdatadog/releases/download/v#{version}/#{asset_name}.tar.gz"
+    target_dir = File.expand_path("vendor/libdatadog-#{version}/#{ruby_platform}")
+
+    puts "Downloading #{asset_name}.tar.gz..."
+
+    Dir.mktmpdir do |tmpdir|
+      tar_path = File.join(tmpdir, "#{asset_name}.tar.gz")
+      Helpers.download_file(url, tar_path)
+
+      system("tar", "-xzf", tar_path, "-C", tmpdir) || raise("Failed to extract #{asset_name}.tar.gz")
+
+      FileUtils.rm_rf(target_dir)
+      FileUtils.mkdir_p(File.dirname(target_dir))
+      FileUtils.mv(File.join(tmpdir, asset_name), target_dir)
+    end
+
+    Helpers.fix_file_permissions(target_dir)
+    puts "#{ruby_platform} -> #{target_dir}"
+  end
+end
+
+desc "Download release artifacts from GitHub and package the fat gem"
+task package_from_github: [:fetch_release_artifacts, :package]
+
+desc "Package all platform binaries as a fat gem (run in CI after all platform binaries are in vendor/)"
 task package: [
   :spec,
-  (:"standard:fix" unless RUBY_VERSION < "2.6"),
-  :build_ffi
+  (:"standard:fix" unless RUBY_VERSION < "2.6")
 ] do
   gemspec = eval(File.read("libdatadog.gemspec"), nil, "libdatadog.gemspec") # standard:disable Security/Eval
   FileUtils.mkdir_p("pkg")
 
-  built_platforms = Dir.glob("vendor/libdatadog-#{Libdatadog::LIB_VERSION}/*/").map { |d| File.basename(d) }
-  raise "No built platforms found in vendor/" if built_platforms.empty?
+  missing_platforms = SUPPORTED_RUBY_PLATFORMS.reject do |platform|
+    Dir.exist?("vendor/libdatadog-#{Libdatadog::LIB_VERSION}/#{platform}")
+  end
+  raise "Missing platform binaries in vendor/ for: #{missing_platforms.join(", ")}" unless missing_platforms.empty?
 
   Helpers.fix_file_permissions_for_gem(gemspec.files)
-
-  # Fallback package with all built binaries
-  Helpers.package_for(gemspec, ruby_platform: nil, files: Helpers.files_for(*built_platforms))
-
-  # Platform-specific gem for each built platform
-  built_platforms.each do |platform|
-    Helpers.package_for(gemspec, ruby_platform: platform, files: Helpers.files_for(platform))
-  end
+  Helpers.package_for(gemspec)
 end
 
 Rake::Task["package"].enhance { Rake::Task["spec_validate_permissions"].execute }
@@ -159,15 +195,29 @@ module Helpers
   # Note: .so for Linux, .dylib for macOS
   EXECUTABLE_FILES = ["libdatadog-crashtracking-receiver", "libdatadog_profiling.so", "libdatadog_profiling.dylib"].freeze
 
-  def self.package_for(gemspec, ruby_platform:, files:)
-    target_gemspec = gemspec.dup
-    target_gemspec.files += files
-    target_gemspec.platform = ruby_platform if ruby_platform
+  def self.download_file(url, dest, redirects: 5)
+    raise "Too many HTTP redirects downloading #{url}" if redirects.zero?
 
-    puts "Building with ruby_platform=#{ruby_platform.inspect} including: (this can take a while)"
-    pp target_gemspec.files
+    uri = URI.parse(url)
+    Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
+      http.request(Net::HTTP::Get.new(uri.request_uri)) do |response|
+        case response
+        when Net::HTTPRedirection
+          return download_file(response["location"], dest, redirects: redirects - 1)
+        when Net::HTTPSuccess
+          File.open(dest, "wb") { |f| response.read_body { |chunk| f.write(chunk) } }
+        else
+          raise "Failed to download #{url}: HTTP #{response.code} #{response.message}"
+        end
+      end
+    end
+  end
 
-    package = Gem::Package.build(target_gemspec)
+  def self.package_for(gemspec)
+    puts "Building fat gem (this can take a while):"
+    pp gemspec.files
+
+    package = Gem::Package.build(gemspec)
     FileUtils.mv(package, "pkg")
     puts("-" * 80)
   end
@@ -206,30 +256,6 @@ module Helpers
         FileUtils.chmod(0o644, path)
       end
     end
-  end
-
-  def self.files_for(
-    *included_platforms,
-    excluded_files: [
-      "datadog_profiling.pc", # we use the datadog_profiling_with_rpath.pc variant
-      "libdatadog_profiling.a", "datadog_profiling-static.pc", # We don't use the static library
-      "libdatadog_profiling.debug", # We don't include debug info
-      "DatadogConfig.cmake" # We don't compile using cmake
-    ]
-  )
-    files = []
-
-    included_platforms.each do |platform|
-      dir = "vendor/libdatadog-#{Libdatadog::LIB_VERSION}/#{platform}"
-      next unless Dir.exist?(dir)
-
-      files +=
-        Dir.glob("#{dir}/**/*")
-          .select { |path| File.file?(path) }
-          .reject { |path| excluded_files.include?(File.basename(path)) }
-    end
-
-    files
   end
 end
 

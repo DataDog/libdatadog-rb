@@ -36,16 +36,20 @@ RSpec.describe "gem release process (after packaging)" do
 
   it "prefixes all public symbols in shared library files" do
     shared_lib_files = Dir.glob("vendor/libdatadog-#{Libdatadog::LIB_VERSION}/**/*.{so,dylib}")
-    expect(shared_lib_files.size).to be >= 1
+    expect(shared_lib_files.size).to eq(SUPPORTED_RUBY_PLATFORMS.size)
+
+    # llvm-nm understands both ELF and Mach-O, so use it when available to inspect all
+    # platform binaries. Fall back to native nm, which can only inspect .so on Linux.
+    llvm_nm = system("which", "llvm-nm", out: File::NULL, err: File::NULL)
 
     shared_lib_files.each do |shared_lib_file|
-      # macOS nm doesn't use a dynamic symbol table (-D); use -g (global) instead
-      nm_flags = shared_lib_file.end_with?(".dylib") ? "-g --defined-only" : "-D --defined-only"
-      raw_symbols = `nm #{nm_flags} #{shared_lib_file}`
+      is_dylib = shared_lib_file.end_with?(".dylib")
+      next if is_dylib && !llvm_nm
 
-      # macOS nm prefixes C symbols with "_"; strip it for consistent matching.
-      # Linker-injected symbols (e.g. __mh_dylib_header) have two leading underscores and
-      # still start with "_" after stripping one — reject them to avoid false failures.
+      nm_tool = llvm_nm ? "llvm-nm" : "nm"
+      nm_flags = is_dylib ? "-g --defined-only" : "-D --defined-only"
+      raw_symbols = `#{nm_tool} #{nm_flags} #{shared_lib_file}`
+
       symbols = raw_symbols.split("\n")
         .map { |symbol| symbol.split(" ").last.downcase.sub(/\A_/, "") }
         .reject { |sym| sym.start_with?("_") }

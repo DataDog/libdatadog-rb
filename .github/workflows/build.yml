@@ -20,8 +20,6 @@ jobs:
           - ruby_platform: x86_64-linux-musl
             base: ubuntu-24.04
             image: ghcr.io/datadog/images-rb/engines/ruby:4.0-musl-gcc
-            rust_target: x86_64-unknown-linux-musl
-            rustup_sha256: 9cd3fda5fd293890e36ab271af6a786ee22084b5f6c2b83fd8323cec6f0992c1
           - ruby_platform: aarch64-linux
             base: ubuntu-24.04-arm
             image: ghcr.io/datadog/images-rb/engines/ruby:4.0-gnu-gcc
@@ -30,24 +28,23 @@ jobs:
           - ruby_platform: aarch64-linux-musl
             base: ubuntu-24.04-arm
             image: ghcr.io/datadog/images-rb/engines/ruby:4.0-musl-gcc
-            rust_target: aarch64-unknown-linux-musl
-            rustup_sha256: 88761caacddb92cd79b0b1f939f3990ba1997d701a38b3e8dd6746a562f2a759
     name: Build (${{ matrix.platform.ruby_platform }})
     runs-on: ${{ matrix.platform.base }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Start container
         run: docker run --rm --detach --name build --volume "${PWD}:${PWD}" -w "${PWD}" ${{ matrix.platform.image }} sleep 86400
-      - name: Install git and build dependencies
+      - name: Install dependencies
         run: |
           docker exec build sh -c '
-            if command -v apt-get >/dev/null 2>&1; then
+            if command -v apk >/dev/null 2>&1; then
+              apk add --no-cache git cmake autoconf automake libtool curl yaml-dev cargo
+            elif command -v apt-get >/dev/null 2>&1; then
               apt-get update && apt-get install -y git cmake autoconf automake libtool curl
-            elif command -v apk >/dev/null 2>&1; then
-              apk add --no-cache git cmake autoconf automake libtool curl yaml-dev
             fi
           '
-      - name: Install Rust toolchain
+      - name: Install Rust toolchain via rustup
+        if: matrix.platform.rustup_sha256
         env:
           RUST_TARGET: ${{ matrix.platform.rust_target }}
           RUSTUP_SHA256: ${{ matrix.platform.rustup_sha256 }}

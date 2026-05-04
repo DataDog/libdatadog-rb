@@ -46,8 +46,15 @@ task default: [
   (:standard unless RUBY_VERSION < "2.6")
 ].compact
 
+task :check_rust_toolchain do
+  missing = %w[rustc cargo].reject { |tool| system("which", tool, out: File::NULL, err: File::NULL) }
+  unless missing.empty?
+    raise "Missing Rust toolchain: #{missing.join(", ")} not found. See README.md for installation instructions."
+  end
+end
+
 desc "Build libdatadog FFI library from source using the builder crate"
-task :build_ffi do
+task build_ffi: :check_rust_toolchain do
   rustc_output = `rustc -vV`
   raise "rustc not found or failed" unless $?.success?
 

@@ -10,8 +10,10 @@ module BuildFromSource
     RUST_TO_RUBY = {
       "x86_64-unknown-linux-gnu" => "x86_64-linux",
       "x86_64-unknown-linux-musl" => "x86_64-linux-musl",
+      "x86_64-alpine-linux-musl" => "x86_64-linux-musl",
       "aarch64-unknown-linux-gnu" => "aarch64-linux",
       "aarch64-unknown-linux-musl" => "aarch64-linux-musl",
+      "aarch64-alpine-linux-musl" => "aarch64-linux-musl",
       "aarch64-apple-darwin" => "arm64-darwin"
     }.freeze
 

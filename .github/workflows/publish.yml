@@ -1,24 +1,40 @@
 name: Publish
-on: workflow_dispatch
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
 
 concurrency: "publish" # Only one publish job at a time
 
 jobs:
-  publish-ruby:
-    name: Build and push gem to RubyGems.org
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish to RubyGems.org
+    needs: build
     runs-on: ubuntu-24.04
     environment: "rubygems.org" # see: https://github.com/DataDog/libdatadog-rb/settings/environments
     permissions:
+      contents: read
       id-token: write # Required for trusted publishing, see https://github.com/rubygems/release-gem
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@7372622e62b60b3cb750dcd2b9e32c247ffec26a # 1.302.0
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@7372622e62b60b3cb750dcd2b9e32c247ffec26a # v1.302.0
         with:
           ruby-version: "4.0"
           bundler-cache: true
-      - name: Install dependencies
-        run: bundle install
-      - name: Fetch and extract prebuilt releases
-        run: bundle exec rake extract
+      - name: Download packaged gems
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: gems
+          path: pkg/
       - uses: rubygems/release-gem@6317d8d1f7e28c24d28f6eff169ea854948bd9f7 # v1.2.0
+        with:
+          rake-task: push_gems

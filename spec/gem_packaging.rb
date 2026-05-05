@@ -6,6 +6,14 @@ require "rubygems/package/tar_reader"
 require "libdatadog"
 require "zlib"
 
+SUPPORTED_RUBY_PLATFORMS = %w[
+  x86_64-linux
+  x86_64-linux-musl
+  aarch64-linux
+  aarch64-linux-musl
+  arm64-darwin
+].freeze
+
 RSpec.describe "gem release process (after packaging)" do
   let(:gem_version) { Libdatadog::VERSION }
   let(:packaged_gem_file) { "pkg/libdatadog-#{gem_version}.gem" }
@@ -34,14 +42,37 @@ RSpec.describe "gem release process (after packaging)" do
     end
   end
 
-  it "prefixes all public symbols in .so files" do
-    so_files = Dir.glob("vendor/libdatadog-#{Libdatadog::LIB_VERSION}/**/*.so")
-    expect(so_files.size).to be 4
+  context "when running in CI" do
+    before { skip "Only validated in CI where all platforms are built" unless ENV["CI"] }
 
-    so_files.each do |so_file|
-      raw_symbols = `nm -D --defined-only #{so_file}`
+    it "packages gems for all supported platforms" do
+      SUPPORTED_RUBY_PLATFORMS.each do |platform|
+        gem_file = "pkg/libdatadog-#{gem_version}-#{platform}.gem"
+        expect(File).to exist(gem_file), "Missing platform gem: #{gem_file}"
+      end
+    end
+  end
 
-      symbols = raw_symbols.split("\n").map { |symbol| symbol.split(" ").last.downcase }.sort
+  it "prefixes all public symbols in shared library files" do
+    shared_lib_files = Dir.glob("vendor/libdatadog-#{Libdatadog::LIB_VERSION}/**/*.{so,dylib}")
+    expect(shared_lib_files.size).to eq(SUPPORTED_RUBY_PLATFORMS.size)
+
+    # llvm-nm understands both ELF and Mach-O, so use it when available to inspect all
+    # platform binaries. Fall back to native nm, which can only inspect .so on Linux.
+    llvm_nm = system("which", "llvm-nm", out: File::NULL, err: File::NULL)
+
+    shared_lib_files.each do |shared_lib_file|
+      is_dylib = shared_lib_file.end_with?(".dylib")
+      next if is_dylib && !llvm_nm
+
+      nm_tool = llvm_nm ? "llvm-nm" : "nm"
+      nm_flags = is_dylib ? "-g --defined-only" : "-D --defined-only"
+      raw_symbols = `#{nm_tool} #{nm_flags} #{shared_lib_file}`
+
+      symbols = raw_symbols.split("\n")
+        .map { |symbol| symbol.split(" ").last.downcase.sub(/\A_/, "") }
+        .reject { |sym| sym.start_with?("_") }
+        .sort
       expect(symbols.size).to be > 20 # Quick sanity check
       expect(symbols).to all(
         start_with("ddog_").or(start_with("blaze_"))

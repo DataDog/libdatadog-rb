@@ -13,6 +13,7 @@
 /Gemfile.lock
 
 /vendor/
+/build/
 
 # direnv
 /.envrc
@@ -21,3 +22,6 @@
 # temporary files
 *~
 *.swp
+
+# Rust build artifacts
+/target

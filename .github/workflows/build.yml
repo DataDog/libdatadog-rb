@@ -132,6 +132,8 @@ jobs:
           find vendor -name 'libdatadog-crashtracking-receiver' -exec chmod 755 {} +
           find vendor -name 'libdatadog_profiling.so' -exec chmod 755 {} +
           find vendor -name 'libdatadog_profiling.dylib' -exec chmod 755 {} +
+      - name: Install llvm-nm
+        run: sudo apt-get install -y llvm
       - name: Package gems
         run: bundle exec rake package
       - name: Upload gems

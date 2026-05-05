@@ -66,11 +66,13 @@ jobs:
       - name: Stop container
         if: always()
         run: docker stop build || true
+      - name: Tar vendor artifacts
+        run: tar cf vendor-${{ matrix.platform.ruby_platform }}.tar vendor/
       - name: Upload vendor artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: vendor-${{ matrix.platform.ruby_platform }}
-          path: vendor/
+          path: vendor-${{ matrix.platform.ruby_platform }}.tar
 
   build-macos:
     strategy:
@@ -104,11 +106,13 @@ jobs:
           echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
       - name: Build libdatadog
         run: bundle exec rake libdatadog:build
+      - name: Tar vendor artifacts
+        run: tar cf vendor-${{ matrix.platform.ruby_platform }}.tar vendor/
       - name: Upload vendor artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: vendor-${{ matrix.platform.ruby_platform }}
-          path: vendor/
+          path: vendor-${{ matrix.platform.ruby_platform }}.tar
 
   package:
     name: Package
@@ -124,8 +128,12 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: vendor-*
-          path: vendor/
           merge-multiple: true
+      - name: Extract vendor artifacts
+        run: |
+          for tarball in vendor-*.tar; do
+            tar xf "${tarball}"
+          done
       - name: Package gems
         run: bundle exec rake package
       - name: Upload gems

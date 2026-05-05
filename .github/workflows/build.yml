@@ -126,6 +126,12 @@ jobs:
           pattern: vendor-*
           path: vendor/
           merge-multiple: true
+      - name: Fix vendor file permissions
+        run: |
+          find vendor -type f -exec chmod 644 {} +
+          find vendor -name 'libdatadog-crashtracking-receiver' -exec chmod 755 {} +
+          find vendor -name 'libdatadog_profiling.so' -exec chmod 755 {} +
+          find vendor -name 'libdatadog_profiling.dylib' -exec chmod 755 {} +
       - name: Package gems
         run: bundle exec rake package
       - name: Upload gems

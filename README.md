@@ -14,7 +14,7 @@ You can also run `bundle exec pry` for an interactive prompt that will allow you
 
 ### Building libdatadog from source
 
-The `build_ffi` task compiles libdatadog locally using the builder crate. This requires a Rust toolchain.
+The `libdatadog:build` task compiles libdatadog locally using the builder crate. This requires a Rust toolchain.
 The required Rust version matches the one used by libdatadog itself (currently **1.84.1**).
 
 Install [rustup](https://rustup.rs) if you don't have it already:
@@ -33,12 +33,24 @@ rustup default 1.84.1
 Once Rust is set up, run the build:
 
 ```sh
-bundle exec rake build_ffi
+bundle exec rake libdatadog:build
 ```
 
-This places the compiled artifacts for the current platform under `build/libdatadog-<version>/<platform>/`.
+This places the compiled artifacts for the current platform under `vendor/libdatadog-<version>/<platform>/`.
 
-> **Note:** Rust is only needed for `build_ffi`. All other tasks — including `fetch_release_artifacts`,
+To build from a local libdatadog checkout instead of fetching from GitHub:
+
+```sh
+LIBDATADOG_SOURCE=/path/to/libdatadog bundle exec rake libdatadog:build
+```
+
+To remove build intermediates and vendor output:
+
+```sh
+bundle exec rake libdatadog:clean
+```
+
+> **Note:** Rust is only needed for `libdatadog:build`. All other tasks — including `fetch_release_artifacts`,
 > `package_from_github`, and the default test suite — work without a Rust installation.
 
 ### Testing packaging locally

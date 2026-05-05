@@ -4,7 +4,6 @@ require "bundler/gem_tasks"
 require "rspec/core/rake_task"
 require "standard/rake" unless RUBY_VERSION < "2.6"
 
-require "etc"
 require "fileutils"
 require "net/http"
 require "pry"
@@ -22,15 +21,6 @@ unless LIB_VERSION_TO_PACKAGE.start_with?(Libdatadog::LIB_VERSION)
     "`LIB_VERSION` setting in <lib/libdatadog/version.rb> (#{Libdatadog::LIB_VERSION})"
 end
 
-RUST_TRIPLE_TO_RUBY_PLATFORM = {
-  "x86_64-unknown-linux-gnu" => "x86_64-linux",
-  "x86_64-unknown-linux-musl" => "x86_64-linux-musl",
-  "aarch64-unknown-linux-gnu" => "aarch64-linux",
-  "aarch64-unknown-linux-musl" => "aarch64-linux-musl",
-  "aarch64-apple-darwin" => "arm64-darwin",
-  "x86_64-apple-darwin" => "arm64-darwin"
-}.freeze
-
 # Maps each supported Ruby platform to its GitHub release asset name (without .tar.gz).
 # Asset names use the Rust triple as released at https://github.com/DataDog/libdatadog/releases.
 RUBY_PLATFORM_TO_RELEASE_ASSET = {
@@ -45,91 +35,6 @@ task default: [
   :spec,
   (:standard unless RUBY_VERSION < "2.6")
 ].compact
-
-task :check_rust_toolchain do
-  missing = %w[rustc cargo].reject { |tool| system("which", tool, out: File::NULL, err: File::NULL) }
-  unless missing.empty?
-    raise "Missing Rust toolchain: #{missing.join(", ")} not found. See README.md for installation instructions."
-  end
-end
-
-desc "Build libdatadog FFI library from source using the builder crate"
-task build_ffi: :check_rust_toolchain do
-  rustc_output = `rustc -vV`
-  raise "rustc not found or failed" unless $?.success?
-
-  host_triple = rustc_output.match(/^host:\s*(.+)$/)[1].strip
-  ruby_platform = RUST_TRIPLE_TO_RUBY_PLATFORM.fetch(host_triple) do
-    raise "Unsupported host triple: #{host_triple}"
-  end
-
-  target_directory = File.expand_path("build/libdatadog-#{Libdatadog::LIB_VERSION}/#{ruby_platform}")
-  FileUtils.mkdir_p(target_directory)
-
-  install_root = File.expand_path("build/release-bin")
-  features = ENV["LIBDATADOG_FEATURES"]
-  source_path = ENV["LIBDATADOG_SOURCE_PATH"]
-
-  install_cmd = if source_path
-    [
-      "cargo", "install",
-      "--path", File.join(source_path, "builder"),
-      "--bin", "release",
-      "--root", install_root,
-      "--force"
-    ]
-  else
-    [
-      "cargo", "install",
-      "--git", "https://github.com/DataDog/libdatadog",
-      "--rev", Libdatadog::LIB_COMMIT_SHA,
-      "--locked",
-      "--bin", "release",
-      "--root", install_root,
-      "--force",
-      "builder"
-    ]
-  end
-
-  if features
-    install_cmd += ["--no-default-features", "--features", features]
-  end
-
-  feature_info = features ? " with features=#{features}" : ""
-  puts "Installing libdatadog builder (#{source_path ? "from #{source_path}" : "v#{Libdatadog::LIB_VERSION} from GitHub"}#{feature_info})..."
-  system(*install_cmd) || raise("cargo install failed")
-
-  # Build env vars required by the cmake crate and cargo sub-invocations inside the builder
-  cargo_target_dir = File.expand_path("build/cargo-target")
-  out_dir = File.expand_path("build/cmake-out")
-  FileUtils.mkdir_p(cargo_target_dir)
-  FileUtils.mkdir_p(out_dir)
-  num_jobs = begin
-    Etc.nprocessors.to_s
-  rescue
-    "1"
-  end
-
-  env = {
-    "PROFILE" => "release",
-    "OPT_LEVEL" => "3",
-    "DEBUG" => "false",
-    "HOST" => host_triple,
-    "TARGET" => host_triple,
-    "NUM_JOBS" => num_jobs,
-    "OUT_DIR" => out_dir,
-    "CARGO_PKG_VERSION" => Libdatadog::LIB_VERSION,
-    "CARGO_TARGET_DIR" => cargo_target_dir
-  }
-
-  binary = File.join(install_root, "bin", "release")
-  puts "Building libdatadog for #{ruby_platform} (#{host_triple})"
-  puts "Output: #{target_directory}"
-
-  system(env, binary, "--out", target_directory) || raise("Builder failed")
-
-  Helpers.fix_file_permissions(target_directory)
-end
 
 desc "Download all platform release artifacts from GitHub into vendor/"
 task :fetch_release_artifacts do
@@ -272,3 +177,5 @@ task(:build) { raise "Build task is disabled, use package instead" }
 
 Rake::Task["release"].clear
 task(:release) { Rake::Task["push_to_rubygems"].invoke }
+
+Dir.glob("tasks/**/*.rake").each { |r| import r }

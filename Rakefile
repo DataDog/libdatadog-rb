@@ -82,7 +82,8 @@ task build_ffi: :check_rust_toolchain do
     [
       "cargo", "install",
       "--git", "https://github.com/DataDog/libdatadog",
-      "--tag", "v#{Libdatadog::LIB_VERSION}",
+      "--rev", Libdatadog::LIB_COMMIT_SHA,
+      "--locked",
       "--bin", "release",
       "--root", install_root,
       "--force",

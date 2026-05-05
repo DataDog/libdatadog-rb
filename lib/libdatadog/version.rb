@@ -3,6 +3,7 @@
 module Libdatadog
   # Current libdatadog version
   LIB_VERSION = "30.0.0"
+  LIB_COMMIT_SHA = "bfdbeae3e32dabf8949a945c421e47c81b098040"
 
   GEM_MAJOR_VERSION = "1"
   GEM_MINOR_VERSION = "0"

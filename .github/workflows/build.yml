@@ -150,7 +150,15 @@ jobs:
           path: vendor-${{ matrix.platform.ruby_platform }}.tar
 
   package:
-    name: Package
+    strategy:
+      fail-fast: false
+      matrix:
+        gem_platform:
+          - x86_64-linux
+          - aarch64-linux
+          - arm64-darwin
+          - ruby
+    name: Package (${{ matrix.gem_platform }})
     needs: [build-linux, build-macos]
     runs-on: ubuntu-24.04
     steps:
@@ -169,10 +177,10 @@ jobs:
           for tarball in vendor-*.tar; do
             tar xf "${tarball}"
           done
-      - name: Package gems
-        run: bundle exec rake package
-      - name: Upload gems
+      - name: Package gem
+        run: bundle exec rake "gem:package[${{ matrix.gem_platform }}]"
+      - name: Upload gem
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: gems
+          name: gem-${{ matrix.gem_platform }}
           path: pkg/*.gem

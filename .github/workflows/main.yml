@@ -16,6 +16,8 @@ jobs:
   build:
     name: Build
     uses: ./.github/workflows/build.yml
+    permissions:
+      id-token: write
 
   test:
     name: Test

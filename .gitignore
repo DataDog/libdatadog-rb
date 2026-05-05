@@ -18,6 +18,9 @@
 /.envrc
 /.direnv
 
+# smoke test compiled binary
+/spec/smoke/smoke_test
+
 # temporary files
 *~
 *.swp

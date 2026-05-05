@@ -232,6 +232,11 @@ jobs:
             raise "pkgconfig_folder is nil" unless Libdatadog.pkgconfig_folder
             raise "crashtracking receiver not found" unless Libdatadog.path_to_crashtracking_receiver_binary
           '
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: spec/smoke
+      - name: Smoke test (compile and run C program against libdatadog)
+        run: docker exec validate ruby spec/smoke/run.rb
       - name: Stop container
         if: always()
         run: docker stop validate || true
@@ -271,3 +276,8 @@ jobs:
             raise "pkgconfig_folder is nil" unless Libdatadog.pkgconfig_folder
             raise "crashtracking receiver not found" unless Libdatadog.path_to_crashtracking_receiver_binary
           '
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: spec/smoke
+      - name: Smoke test (compile and run C program against libdatadog)
+        run: ruby spec/smoke/run.rb

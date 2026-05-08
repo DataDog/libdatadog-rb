@@ -1,4 +1,4 @@
-* @DataDog/ruby-guild
+* @DataDog/ruby-guild @DataDog/libdatadog
 
 # Nix
 *.nix @DataDog/nix-guild @DataDog/ruby-guild

@@ -1,6 +1,6 @@
 # libdatadog Ruby gem
 
-`libdatadog` provides a shared library containing common code used in the implementation of Datadog's libraries,
+[libdatadog](https://github.com/DataDog/libdatadog) provides a shared library containing common code used in the implementation of Datadog's libraries,
 including [Continuous Profilers](https://docs.datadoghq.com/tracing/profiler/).
 
 **NOTE**: If you're building a new Datadog library/profiler or want to contribute to Datadog's existing tools, you've come to the

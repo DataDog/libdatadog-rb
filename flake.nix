@@ -38,6 +38,14 @@
         deps = [
           pkgs.libyaml.dev  # for gem: psych
           pkgs.libffi.dev   # for gem: fiddle, ffi
+
+          # for compiling libdatadog
+          pkgs.rustc
+          pkgs.cargo
+          pkgs.cmake
+          pkgs.autoconf
+          pkgs.automake
+          pkgs.libtool
         ];
 
         mkRubyDevShell = { pkg }: pkgs.stdenv.mkDerivation {

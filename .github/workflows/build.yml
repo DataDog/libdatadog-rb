@@ -5,6 +5,7 @@ on:
 
 env:
   RUSTUP_VERSION: "1.29.0"
+  CMAKE_VERSION: "3.27.9"
 
 jobs:
   # this is separate from `build-macos` because this uses docker
@@ -15,17 +16,21 @@ jobs:
         platform:
           - ruby_platform: x86_64-linux
             base: ubuntu-24.04
-            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-gnu-gcc
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-centos-gcc
             rust_target: x86_64-unknown-linux-gnu
             rustup_sha256: 4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10
+            cmake_arch: x86_64
+            cmake_sha256: 72b01478eeb312bf1a0136208957784fe55a7b587f8d9f9142a7fc9b0b9e9a28
           - ruby_platform: x86_64-linux-musl
             base: ubuntu-24.04
             image: ghcr.io/datadog/images-rb/engines/ruby:4.0-musl-gcc
           - ruby_platform: aarch64-linux
             base: ubuntu-24.04-arm
-            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-gnu-gcc
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-centos-gcc
             rust_target: aarch64-unknown-linux-gnu
             rustup_sha256: 9732d6c5e2a098d3521fca8145d826ae0aaa067ef2385ead08e6feac88fa5792
+            cmake_arch: aarch64
+            cmake_sha256: 11bf3d30697df465cdf43664a9473a586f010c528376a966fd310a3a22082461
           - ruby_platform: aarch64-linux-musl
             base: ubuntu-24.04-arm
             image: ghcr.io/datadog/images-rb/engines/ruby:4.0-musl-gcc
@@ -39,10 +44,30 @@ jobs:
         run: |
           docker exec build sh -c '
             if command -v apk >/dev/null 2>&1; then
-              apk add --no-cache git cmake autoconf automake libtool curl yaml-dev cargo
+              apk add --no-cache git cmake autoconf automake libtool curl yaml-dev linux-headers cargo
+            elif command -v yum >/dev/null 2>&1; then
+              yum install -y git autoconf automake libtool curl tar
             elif command -v apt-get >/dev/null 2>&1; then
               apt-get update && apt-get install -y git cmake autoconf automake libtool curl
+            else
+              echo "No supported package manager found" >&2
+              exit 1
             fi
+          '
+      - name: Install CMake
+        if: matrix.platform.cmake_sha256
+        env:
+          CMAKE_ARCH: ${{ matrix.platform.cmake_arch }}
+          CMAKE_SHA256: ${{ matrix.platform.cmake_sha256 }}
+        run: |
+          docker exec --env CMAKE_VERSION --env CMAKE_ARCH --env CMAKE_SHA256 build sh -c '
+            curl -fsSL -o /tmp/cmake.tar.gz "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-${CMAKE_ARCH}.tar.gz"
+            echo "${CMAKE_SHA256}  /tmp/cmake.tar.gz" | sha256sum -c -
+            rm -rf /opt/cmake
+            mkdir -p /opt/cmake
+            tar -xzf /tmp/cmake.tar.gz --strip-components=1 -C /opt/cmake
+            /opt/cmake/bin/cmake --version
+            rm /tmp/cmake.tar.gz
           '
       - name: Install Rust toolchain via rustup
         if: matrix.platform.rustup_sha256
@@ -60,6 +85,12 @@ jobs:
       - name: Build libdatadog
         run: |
           docker exec build sh -c '
+            if [ -f /opt/rh/devtoolset-10/enable ]; then
+              . /opt/rh/devtoolset-10/enable
+            fi
+            if [ -d /opt/cmake/bin ]; then
+              export PATH="/opt/cmake/bin:${PATH}"
+            fi
             export PATH="${HOME}/.cargo/bin:${PATH}"
             bundle install
             bundle exec rake libdatadog:build

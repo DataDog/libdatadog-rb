@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  RUST_VERSION: "1.84.1"
+  RUST_VERSION: "1.85.1"
   CMAKE_VERSION: "3.27.9"
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
             base: ubuntu-24.04
             image: ghcr.io/datadog/images-rb/engines/ruby:4.0-centos-gcc
             rust_target: x86_64-unknown-linux-gnu
-            rust_sha256: 106c89f23ce1c763fcbea8e2714b2ba869bf7af70804813987a4483896398933
+            rust_sha256: b7202563a52b47f575b284a5a4794fafd688e39bfe8fd855b5e80129e671cb7f
             cmake_arch: x86_64
             cmake_sha256: 72b01478eeb312bf1a0136208957784fe55a7b587f8d9f9142a7fc9b0b9e9a28
           - ruby_platform: x86_64-linux-musl
@@ -28,7 +28,7 @@ jobs:
             base: ubuntu-24.04-arm
             image: ghcr.io/datadog/images-rb/engines/ruby:4.0-centos-gcc
             rust_target: aarch64-unknown-linux-gnu
-            rust_sha256: be89f6ad9b70cc4b25182ae299f94ab047a713a51fddf95284823c8afe4aef85
+            rust_sha256: d2609d8cd965060f0b4a8c509131066369e8d3d31a92fedce177b42b32af6b4d
             cmake_arch: aarch64
             cmake_sha256: 11bf3d30697df465cdf43664a9473a586f010c528376a966fd310a3a22082461
           - ruby_platform: aarch64-linux-musl
@@ -116,7 +116,7 @@ jobs:
           - ruby_platform: arm64-darwin
             base: macos-15
             rust_target: aarch64-apple-darwin
-            rust_sha256: 49be10fa1a1de14e36d37cc412b7c44e01896c0a86a2d0d35ee26704a59adba7
+            rust_sha256: 64b0341a47e684d648c9b7defd0b7ff9d5397a64718cf803c1e114544f94bbe9
     name: Build (${{ matrix.platform.ruby_platform }})
     runs-on: ${{ matrix.platform.base }}
     steps:

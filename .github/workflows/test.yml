@@ -20,14 +20,23 @@ jobs:
             base: macos-15 # always arm64-darwin
         ruby:
           - version: "2.5"
+            bundler: "2.3.27"
           - version: "2.6"
+            bundler: "2.4.22"
           - version: "2.7"
+            bundler: "2.4.22"
           - version: "3.0"
+            bundler: "2.5.23"
           - version: "3.1"
+            bundler: "2.6.9"
           - version: "3.2"
+            bundler: "4.0.3"
           - version: "3.3"
+            bundler: "4.0.3"
           - version: "3.4"
+            bundler: "4.0.3"
           - version: "4.0"
+            bundler: "4.0.3"
         exclude:
           # Ruby 2.5 is not available on arm64-darwin
           - platform:
@@ -41,6 +50,7 @@ jobs:
       - uses: ruby/setup-ruby@7372622e62b60b3cb750dcd2b9e32c247ffec26a # 1.302.0
         with:
           ruby-version: ${{ matrix.ruby.version }}
+          bundler: ${{ matrix.ruby.bundler }}
           bundler-cache: true # runs 'bundle install' and caches installed gems automatically
       - run: bundle exec rake
       - run: bundle exec rake extract

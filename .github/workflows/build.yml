@@ -80,7 +80,7 @@ jobs:
             curl -fsSLO "https://static.rust-lang.org/dist/${rust_tarball}"
             echo "${RUST_SHA256}  ${rust_tarball}" | sha256sum -c -
             tar -xzf "${rust_tarball}"
-            "./rust-${RUST_VERSION}-${RUST_TARGET}/install.sh" --prefix="${HOME}/.cargo"
+            "./rust-${RUST_VERSION}-${RUST_TARGET}/install.sh" --prefix="${HOME}/.cargo" --components="rustc,cargo,clippy-preview,rustfmt-preview,rust-std-${RUST_TARGET}"
             rm -rf "${rust_tarball}" "rust-${RUST_VERSION}-${RUST_TARGET}"
           '
       - name: Build libdatadog
@@ -136,7 +136,7 @@ jobs:
           curl -fsSLO "https://static.rust-lang.org/dist/${rust_tarball}"
           echo "${RUST_SHA256}  ${rust_tarball}" | shasum -a 256 -c -
           tar -xzf "${rust_tarball}"
-          "./rust-${RUST_VERSION}-${RUST_TARGET}/install.sh" --prefix="${HOME}/.cargo"
+          "./rust-${RUST_VERSION}-${RUST_TARGET}/install.sh" --prefix="${HOME}/.cargo" --components="rustc,cargo,clippy-preview,rustfmt-preview,rust-std-${RUST_TARGET}"
           rm -rf "${rust_tarball}" "rust-${RUST_VERSION}-${RUST_TARGET}"
           echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
       - name: Build libdatadog

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  RUSTUP_VERSION: "1.29.0"
+  RUST_VERSION: "1.84.1"
   CMAKE_VERSION: "3.27.9"
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
             base: ubuntu-24.04
             image: ghcr.io/datadog/images-rb/engines/ruby:4.0-centos-gcc
             rust_target: x86_64-unknown-linux-gnu
-            rustup_sha256: 4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10
+            rust_sha256: 106c89f23ce1c763fcbea8e2714b2ba869bf7af70804813987a4483896398933
             cmake_arch: x86_64
             cmake_sha256: 72b01478eeb312bf1a0136208957784fe55a7b587f8d9f9142a7fc9b0b9e9a28
           - ruby_platform: x86_64-linux-musl
@@ -28,7 +28,7 @@ jobs:
             base: ubuntu-24.04-arm
             image: ghcr.io/datadog/images-rb/engines/ruby:4.0-centos-gcc
             rust_target: aarch64-unknown-linux-gnu
-            rustup_sha256: 9732d6c5e2a098d3521fca8145d826ae0aaa067ef2385ead08e6feac88fa5792
+            rust_sha256: be89f6ad9b70cc4b25182ae299f94ab047a713a51fddf95284823c8afe4aef85
             cmake_arch: aarch64
             cmake_sha256: 11bf3d30697df465cdf43664a9473a586f010c528376a966fd310a3a22082461
           - ruby_platform: aarch64-linux-musl
@@ -69,19 +69,20 @@ jobs:
             /opt/cmake/bin/cmake --version
             rm /tmp/cmake.tar.gz
           '
-      - name: Install Rust toolchain via rustup
-        if: matrix.platform.rustup_sha256
+      - name: Install Rust toolchain
+        if: matrix.platform.rust_sha256
         env:
           RUST_TARGET: ${{ matrix.platform.rust_target }}
-          RUSTUP_SHA256: ${{ matrix.platform.rustup_sha256 }}
+          RUST_SHA256: ${{ matrix.platform.rust_sha256 }}
         run: |
-          docker exec build sh -c "
-            curl -sSfO https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUST_TARGET}/rustup-init
-            echo \"${RUSTUP_SHA256}  rustup-init\" | sha256sum -c -
-            chmod +x rustup-init
-            ./rustup-init -y --default-toolchain stable
-            rm rustup-init
-          "
+          docker exec --env RUST_VERSION --env RUST_TARGET --env RUST_SHA256 build sh -c '
+            rust_tarball="rust-${RUST_VERSION}-${RUST_TARGET}.tar.gz"
+            curl -fsSLO "https://static.rust-lang.org/dist/${rust_tarball}"
+            echo "${RUST_SHA256}  ${rust_tarball}" | sha256sum -c -
+            tar -xzf "${rust_tarball}"
+            "./rust-${RUST_VERSION}-${RUST_TARGET}/install.sh" --prefix="${HOME}/.cargo"
+            rm -rf "${rust_tarball}" "rust-${RUST_VERSION}-${RUST_TARGET}"
+          '
       - name: Build libdatadog
         run: |
           docker exec build sh -c '
@@ -115,7 +116,7 @@ jobs:
           - ruby_platform: arm64-darwin
             base: macos-15
             rust_target: aarch64-apple-darwin
-            rustup_sha256: aeb4105778ca1bd3c6b0e75768f581c656633cd51368fa61289b6a71696ac7e1
+            rust_sha256: 49be10fa1a1de14e36d37cc412b7c44e01896c0a86a2d0d35ee26704a59adba7
     name: Build (${{ matrix.platform.ruby_platform }})
     runs-on: ${{ matrix.platform.base }}
     steps:
@@ -129,13 +130,14 @@ jobs:
       - name: Install Rust toolchain
         env:
           RUST_TARGET: ${{ matrix.platform.rust_target }}
-          RUSTUP_SHA256: ${{ matrix.platform.rustup_sha256 }}
+          RUST_SHA256: ${{ matrix.platform.rust_sha256 }}
         run: |
-          curl -sSfO "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUST_TARGET}/rustup-init"
-          echo "${RUSTUP_SHA256}  rustup-init" | shasum -a 256 -c -
-          chmod +x rustup-init
-          ./rustup-init -y --default-toolchain stable
-          rm rustup-init
+          rust_tarball="rust-${RUST_VERSION}-${RUST_TARGET}.tar.gz"
+          curl -fsSLO "https://static.rust-lang.org/dist/${rust_tarball}"
+          echo "${RUST_SHA256}  ${rust_tarball}" | shasum -a 256 -c -
+          tar -xzf "${rust_tarball}"
+          "./rust-${RUST_VERSION}-${RUST_TARGET}/install.sh" --prefix="${HOME}/.cargo"
+          rm -rf "${rust_tarball}" "rust-${RUST_VERSION}-${RUST_TARGET}"
           echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
       - name: Build libdatadog
         run: bundle exec rake libdatadog:build

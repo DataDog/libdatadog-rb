@@ -7,6 +7,7 @@ env:
   RUSTUP_VERSION: "1.29.0"
 
 jobs:
+  # this is separate from `build-macos` because this uses docker
   build-linux:
     strategy:
       fail-fast: false
@@ -74,6 +75,7 @@ jobs:
           name: vendor-${{ matrix.platform.ruby_platform }}
           path: vendor-${{ matrix.platform.ruby_platform }}.tar
 
+  # this is separate from `build-linux` because this doesn't use docker
   build-macos:
     strategy:
       fail-fast: false

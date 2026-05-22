@@ -19,4 +19,6 @@ jobs:
           bundler-cache: true
       - name: Install dependencies
         run: bundle install
+      - name: Fetch and extract prebuilt releases
+        run: bundle exec rake extract
       - uses: rubygems/release-gem@6317d8d1f7e28c24d28f6eff169ea854948bd9f7 # v1.2.0

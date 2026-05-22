@@ -99,8 +99,7 @@ end
 desc "Package lib downloaded releases as gems"
 task package: [
   :spec,
-  (:"standard:fix" unless RUBY_VERSION < "2.6"),
-  :extract
+  (:"standard:fix" unless RUBY_VERSION < "2.6")
 ] do
   gemspec = eval(File.read("libdatadog.gemspec"), nil, "libdatadog.gemspec") # standard:disable Security/Eval
   FileUtils.mkdir_p("pkg")

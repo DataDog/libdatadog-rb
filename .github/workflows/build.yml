@@ -1,0 +1,178 @@
+name: Build
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: "1.85.1"
+  CMAKE_VERSION: "3.27.9"
+
+jobs:
+  # this is separate from `build-macos` because this uses docker
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - ruby_platform: x86_64-linux
+            base: ubuntu-24.04
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-centos-gcc
+            rust_target: x86_64-unknown-linux-gnu
+            rust_sha256: b7202563a52b47f575b284a5a4794fafd688e39bfe8fd855b5e80129e671cb7f
+            cmake_arch: x86_64
+            cmake_sha256: 72b01478eeb312bf1a0136208957784fe55a7b587f8d9f9142a7fc9b0b9e9a28
+          - ruby_platform: x86_64-linux-musl
+            base: ubuntu-24.04
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-musl-gcc
+          - ruby_platform: aarch64-linux
+            base: ubuntu-24.04-arm
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-centos-gcc
+            rust_target: aarch64-unknown-linux-gnu
+            rust_sha256: d2609d8cd965060f0b4a8c509131066369e8d3d31a92fedce177b42b32af6b4d
+            cmake_arch: aarch64
+            cmake_sha256: 11bf3d30697df465cdf43664a9473a586f010c528376a966fd310a3a22082461
+          - ruby_platform: aarch64-linux-musl
+            base: ubuntu-24.04-arm
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-musl-gcc
+    name: Build (${{ matrix.platform.ruby_platform }})
+    runs-on: ${{ matrix.platform.base }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Start container
+        run: docker run --rm --detach --name build --volume "${PWD}:${PWD}" -w "${PWD}" ${{ matrix.platform.image }} sleep 86400
+      - name: Install dependencies
+        run: |
+          docker exec build sh -c '
+            if command -v apk >/dev/null 2>&1; then
+              apk add --no-cache git cmake autoconf automake libtool curl yaml-dev linux-headers cargo
+            elif command -v yum >/dev/null 2>&1; then
+              yum install -y git autoconf automake libtool curl tar
+            elif command -v apt-get >/dev/null 2>&1; then
+              apt-get update && apt-get install -y git cmake autoconf automake libtool curl
+            else
+              echo "No supported package manager found" >&2
+              exit 1
+            fi
+          '
+      - name: Install CMake
+        if: matrix.platform.cmake_sha256
+        env:
+          CMAKE_ARCH: ${{ matrix.platform.cmake_arch }}
+          CMAKE_SHA256: ${{ matrix.platform.cmake_sha256 }}
+        run: |
+          docker exec --env CMAKE_VERSION --env CMAKE_ARCH --env CMAKE_SHA256 build sh -c '
+            curl -fsSL -o /tmp/cmake.tar.gz "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-${CMAKE_ARCH}.tar.gz"
+            echo "${CMAKE_SHA256}  /tmp/cmake.tar.gz" | sha256sum -c -
+            rm -rf /opt/cmake
+            mkdir -p /opt/cmake
+            tar -xzf /tmp/cmake.tar.gz --strip-components=1 -C /opt/cmake
+            /opt/cmake/bin/cmake --version
+            rm /tmp/cmake.tar.gz
+          '
+      - name: Install Rust toolchain
+        if: matrix.platform.rust_sha256
+        env:
+          RUST_TARGET: ${{ matrix.platform.rust_target }}
+          RUST_SHA256: ${{ matrix.platform.rust_sha256 }}
+        run: |
+          docker exec --env RUST_VERSION --env RUST_TARGET --env RUST_SHA256 build sh -c '
+            rust_tarball="rust-${RUST_VERSION}-${RUST_TARGET}.tar.gz"
+            curl -fsSLO "https://static.rust-lang.org/dist/${rust_tarball}"
+            echo "${RUST_SHA256}  ${rust_tarball}" | sha256sum -c -
+            tar -xzf "${rust_tarball}"
+            "./rust-${RUST_VERSION}-${RUST_TARGET}/install.sh" --prefix="${HOME}/.cargo" --components="rustc,cargo,clippy-preview,rustfmt-preview,rust-std-${RUST_TARGET}"
+            rm -rf "${rust_tarball}" "rust-${RUST_VERSION}-${RUST_TARGET}"
+          '
+      - name: Build libdatadog
+        run: |
+          docker exec build sh -c '
+            if [ -f /opt/rh/devtoolset-10/enable ]; then
+              . /opt/rh/devtoolset-10/enable
+            fi
+            if [ -d /opt/cmake/bin ]; then
+              export PATH="/opt/cmake/bin:${PATH}"
+            fi
+            export PATH="${HOME}/.cargo/bin:${PATH}"
+            bundle install
+            bundle exec rake libdatadog:build
+          '
+      - name: Stop container
+        if: always()
+        run: docker stop build || true
+      - name: Tar vendor artifacts
+        run: tar cf vendor-${{ matrix.platform.ruby_platform }}.tar vendor/
+      - name: Upload vendor artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vendor-${{ matrix.platform.ruby_platform }}
+          path: vendor-${{ matrix.platform.ruby_platform }}.tar
+
+  # this is separate from `build-linux` because this doesn't use docker
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - ruby_platform: arm64-darwin
+            base: macos-15
+            rust_target: aarch64-apple-darwin
+            rust_sha256: 64b0341a47e684d648c9b7defd0b7ff9d5397a64718cf803c1e114544f94bbe9
+    name: Build (${{ matrix.platform.ruby_platform }})
+    runs-on: ${{ matrix.platform.base }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ruby/setup-ruby@7372622e62b60b3cb750dcd2b9e32c247ffec26a # v1.302.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Install build dependencies
+        run: brew install cmake autoconf automake libtool
+      - name: Install Rust toolchain
+        env:
+          RUST_TARGET: ${{ matrix.platform.rust_target }}
+          RUST_SHA256: ${{ matrix.platform.rust_sha256 }}
+        run: |
+          rust_tarball="rust-${RUST_VERSION}-${RUST_TARGET}.tar.gz"
+          curl -fsSLO "https://static.rust-lang.org/dist/${rust_tarball}"
+          echo "${RUST_SHA256}  ${rust_tarball}" | shasum -a 256 -c -
+          tar -xzf "${rust_tarball}"
+          "./rust-${RUST_VERSION}-${RUST_TARGET}/install.sh" --prefix="${HOME}/.cargo" --components="rustc,cargo,clippy-preview,rustfmt-preview,rust-std-${RUST_TARGET}"
+          rm -rf "${rust_tarball}" "rust-${RUST_VERSION}-${RUST_TARGET}"
+          echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
+      - name: Build libdatadog
+        run: bundle exec rake libdatadog:build
+      - name: Tar vendor artifacts
+        run: tar cf vendor-${{ matrix.platform.ruby_platform }}.tar vendor/
+      - name: Upload vendor artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vendor-${{ matrix.platform.ruby_platform }}
+          path: vendor-${{ matrix.platform.ruby_platform }}.tar
+
+  package:
+    name: Package
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ruby/setup-ruby@7372622e62b60b3cb750dcd2b9e32c247ffec26a # v1.302.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Download all vendor artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: vendor-*
+          merge-multiple: true
+      - name: Extract vendor artifacts
+        run: |
+          for tarball in vendor-*.tar; do
+            tar xf "${tarball}"
+          done
+      - name: Package gems
+        run: bundle exec rake package
+      - name: Upload gems
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gems
+          path: pkg/*.gem

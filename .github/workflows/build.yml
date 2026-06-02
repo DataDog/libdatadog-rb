@@ -150,7 +150,15 @@ jobs:
           path: vendor-${{ matrix.platform.ruby_platform }}.tar
 
   package:
-    name: Package
+    strategy:
+      fail-fast: false
+      matrix:
+        gem_platform:
+          - x86_64-linux
+          - aarch64-linux
+          - arm64-darwin
+          - ruby
+    name: Package (${{ matrix.gem_platform }})
     needs: [build-linux, build-macos]
     runs-on: ubuntu-24.04
     steps:
@@ -169,10 +177,107 @@ jobs:
           for tarball in vendor-*.tar; do
             tar xf "${tarball}"
           done
-      - name: Package gems
-        run: bundle exec rake package
-      - name: Upload gems
+      - name: Package gem
+        run: bundle exec rake "gem:package[${{ matrix.gem_platform }}]"
+      - name: Upload gem
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: gems
+          name: gem-${{ matrix.gem_platform }}
           path: pkg/*.gem
+
+  validate-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        gem_source: [binary, ruby]
+        platform:
+          - ruby_platform: x86_64-linux
+            gem_platform: x86_64-linux
+            base: ubuntu-24.04
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-gnu-gcc
+          - ruby_platform: x86_64-linux-musl
+            gem_platform: x86_64-linux
+            base: ubuntu-24.04
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-musl-gcc
+          - ruby_platform: aarch64-linux
+            gem_platform: aarch64-linux
+            base: ubuntu-24.04-arm
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-gnu-gcc
+          - ruby_platform: aarch64-linux-musl
+            gem_platform: aarch64-linux
+            base: ubuntu-24.04-arm
+            image: ghcr.io/datadog/images-rb/engines/ruby:4.0-musl-gcc
+    name: Validate (${{ matrix.platform.ruby_platform }}, ${{ matrix.gem_source }})
+    needs: [package]
+    runs-on: ${{ matrix.platform.base }}
+    steps:
+      - name: Download gem
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: gem-${{ matrix.gem_source == 'ruby' && 'ruby' || matrix.platform.gem_platform }}
+          path: pkg
+      - name: Start container
+        run: docker run --rm --detach --name validate --volume "${PWD}:${PWD}" -w "${PWD}" ${{ matrix.platform.image }} sleep 86400
+      - name: Install gem
+        run: docker exec validate gem install pkg/*.gem
+      - name: Validate gem
+        run: |
+          docker exec validate ruby -e '
+            require "libdatadog"
+            puts "version:    #{Libdatadog::VERSION}"
+            puts "platform:   #{RUBY_PLATFORM}"
+            puts "binaries:   #{Libdatadog.available_binaries}"
+            puts "pkgconfig:  #{Libdatadog.pkgconfig_folder}"
+            puts "receiver:   #{Libdatadog.path_to_crashtracking_receiver_binary}"
+            raise "pkgconfig_folder is nil" unless Libdatadog.pkgconfig_folder
+            raise "crashtracking receiver not found" unless Libdatadog.path_to_crashtracking_receiver_binary
+          '
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: spec/smoke
+      - name: Smoke test (compile and run C program against libdatadog)
+        run: docker exec validate ruby spec/smoke/run.rb
+      - name: Stop container
+        if: always()
+        run: docker stop validate || true
+
+  validate-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        gem_source: [binary, ruby]
+        platform:
+          - ruby_platform: arm64-darwin
+            gem_platform: arm64-darwin
+            base: macos-15
+    name: Validate (${{ matrix.platform.ruby_platform }}, ${{ matrix.gem_source }})
+    needs: [package]
+    runs-on: ${{ matrix.platform.base }}
+    steps:
+      - uses: ruby/setup-ruby@7372622e62b60b3cb750dcd2b9e32c247ffec26a # v1.302.0
+        with:
+          ruby-version: "4.0"
+      - name: Download gem
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: gem-${{ matrix.gem_source == 'ruby' && 'ruby' || matrix.platform.gem_platform }}
+          path: pkg
+      - name: Install gem
+        run: gem install pkg/*.gem
+      - name: Validate gem
+        run: |
+          ruby -e '
+            require "libdatadog"
+            puts "version:    #{Libdatadog::VERSION}"
+            puts "platform:   #{RUBY_PLATFORM}"
+            puts "binaries:   #{Libdatadog.available_binaries}"
+            puts "pkgconfig:  #{Libdatadog.pkgconfig_folder}"
+            puts "receiver:   #{Libdatadog.path_to_crashtracking_receiver_binary}"
+            raise "pkgconfig_folder is nil" unless Libdatadog.pkgconfig_folder
+            raise "crashtracking receiver not found" unless Libdatadog.path_to_crashtracking_receiver_binary
+          '
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: spec/smoke
+      - name: Smoke test (compile and run C program against libdatadog)
+        run: ruby spec/smoke/run.rb

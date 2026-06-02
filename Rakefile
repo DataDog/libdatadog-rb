@@ -132,7 +132,6 @@ end
 
 desc "Release all packaged gems"
 task push_to_rubygems: [
-  :package,
   :"release:guard_clean"
 ] do
   [

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "etc"
+require "fileutils"
 require "pathname"
 
 module BuildFromSource
@@ -130,6 +131,74 @@ module BuildFromSource
       end
     end
   end
+
+  # Ship the existing `libdd-shared-runtime-ffi` FFI crate as an additional
+  # library + header, WITHOUT modifying the libdatadog source.
+  #
+  # Interim approach (source builds only); see the commit message and the
+  # cross-library caveat before relying on it under fork.
+  #
+  # The aggregate `libdatadog_profiling.so` is built solely from `libdd-profiling-ffi`,
+  # which does not depend on `libdd-shared-runtime-ffi`, so the `ddog_shared_runtime_*`
+  # fork-lifecycle symbols never land in it. Instead we build that crate's own cdylib
+  # (it already declares `crate-type = ["lib", "staticlib", "cdylib"]`) and drop it,
+  # plus its cbindgen-generated `shared-runtime.h`, into the vendored tree.
+  module SharedRuntimeFFI
+    CRATE = "libdd-shared-runtime-ffi"
+    # cargo emits lib<crate-with-underscores>.so for the cdylib
+    CARGO_CDYLIB = "liblibdd_shared_runtime_ffi.so"
+    # Clean, stable name we ship + bake into the cdylib's soname
+    SHIPPED_LIB = "libdatadog_shared_runtime.so"
+    HEADER = "shared-runtime.h"
+
+    class << self
+      # Build the cdylib + header from a local libdatadog checkout and install
+      # them into the vendored platform tree. Requires LIBDATADOG_SOURCE; for
+      # tag-based builds (no source checkout) this is skipped.
+      def build_and_install(source:, host_triple:, target_dir:)
+        unless source
+          puts "[shared-runtime-ffi] LIBDATADOG_SOURCE not set; skipping (prototype only supports source builds)"
+          return
+        end
+
+        source_root = Pathname.new(source).expand_path
+        puts "[shared-runtime-ffi] Building #{CRATE} cdylib from #{source_root}"
+
+        cargo_cmd = %W[
+          cargo rustc
+          -p #{CRATE}
+          --release
+          --target #{host_triple}
+          --features cbindgen,catch_panic
+          --crate-type cdylib
+          --
+          -C relocation-model=pic
+          -C link-arg=-Wl,-soname,#{SHIPPED_LIB}
+        ]
+
+        env = {"CARGO_TARGET_DIR" => Paths.cargo_target.to_s}
+        Dir.chdir(source_root) do
+          system(env, *cargo_cmd) || raise("Failed to build #{CRATE}")
+        end
+
+        # Install the cdylib (renamed to its soname) into lib/
+        cdylib_src = Paths.cargo_target / host_triple / "release" / CARGO_CDYLIB
+        raise "Expected cdylib not found: #{cdylib_src}" unless cdylib_src.exist?
+        lib_dst = target_dir / "lib" / SHIPPED_LIB
+        lib_dst.dirname.mkpath
+        FileUtils.cp(cdylib_src, lib_dst)
+        puts "[shared-runtime-ffi] Installed #{lib_dst}"
+
+        # Install the cbindgen-generated header into include/datadog/
+        header_src = Paths.cargo_target / "include" / "datadog" / HEADER
+        raise "Expected header not found: #{header_src}" unless header_src.exist?
+        header_dst = target_dir / "include" / "datadog" / HEADER
+        header_dst.dirname.mkpath
+        FileUtils.cp(header_src, header_dst)
+        puts "[shared-runtime-ffi] Installed #{header_dst}"
+      end
+    end
+  end
 end
 
 namespace :libdatadog do
@@ -158,6 +227,13 @@ namespace :libdatadog do
     puts "Building libdatadog for #{ruby_platform} (#{host_triple})"
     puts "Output: #{target_dir}"
     system(env, paths.builder_bin.to_s, "--out", target_dir.to_s) || raise("Builder failed")
+
+    # Additionally build + install the shared-runtime FFI lib/header.
+    BuildFromSource::SharedRuntimeFFI.build_and_install(
+      source: source,
+      host_triple: host_triple,
+      target_dir: target_dir
+    )
 
     # Fix file permissions to match expected values for packaging
     Helpers.fix_file_permissions(target_dir.to_s)

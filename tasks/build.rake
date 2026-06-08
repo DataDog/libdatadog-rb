@@ -81,27 +81,56 @@ module BuildFromSource
   end
 
   module Builder
+    LIBDATADOG_GIT_URL = "https://github.com/DataDog/libdatadog"
+
     class << self
       # Build the cargo install command for the builder crate's `release` binary.
       #
-      # source:   optional path to a local libdatadog checkout
-      # features: optional comma-separated feature override
-      def cargo_install_cmd(source: nil, features: nil)
+      # The libdatadog code to build is selected from exactly one of the following,
+      # which are mutually exclusive (passing more than one raises):
+      #   source: path to a local libdatadog checkout. Built via --path, WITHOUT
+      #           --locked, since the checkout may be modified locally.
+      #   tag:    a git tag.    Built via --git --tag <tag> --locked.
+      #   ref:    a git commit. Built via --git --rev <ref> --locked.
+      # When none are given, defaults to the pinned --tag v<LIB_VERSION> --locked.
+      #
+      # Git builds pass --locked so they reproducibly use libdatadog's Cargo.lock.
+      # features: optional comma-separated cargo feature override, appended in all cases.
+      def cargo_install_cmd(source: nil, tag: nil, ref: nil, features: nil)
+        source = presence(source)
+        tag = presence(tag)
+        ref = presence(ref)
+        features = presence(features)
+
+        selected = {source: source, tag: tag, ref: ref}.select { |_, value| value }
+        if selected.size > 1
+          raise "Only one of source, tag, ref may be set at a time (got: #{selected.keys.join(", ")})"
+        end
+
         cmd = %W[cargo install --bin release --root #{Paths.builder_root} --force]
 
         cmd += if source
           ["--path", (Pathname.new(source).expand_path / "builder").to_s]
         else
-          [
-            "--git", "https://github.com/DataDog/libdatadog",
-            "--tag", "v#{Libdatadog::LIB_VERSION}",
-            "builder"
-          ]
+          flag, value =
+            if tag
+              ["--tag", tag]
+            elsif ref
+              ["--rev", ref]
+            else
+              ["--tag", "v#{Libdatadog::LIB_VERSION}"]
+            end
+          ["--git", LIBDATADOG_GIT_URL, flag, value, "--locked", "builder"]
         end
 
         cmd += ["--no-default-features", "--features", features] if features
 
         cmd
+      end
+
+      # Normalize a value to nil when it is nil or blank, otherwise return it unchanged.
+      def presence(value)
+        value if value && !value.to_s.strip.empty?
       end
 
       # Environment variables required by the builder binary at runtime.
@@ -139,12 +168,25 @@ namespace :libdatadog do
     ruby_platform = BuildFromSource::Target.ruby_platform(host_triple)
     paths = BuildFromSource::Paths
 
-    # Install builder binary
+    # Install builder binary. source / tag / ref are mutually exclusive; precedence
+    # and validation are handled by cargo_install_cmd.
     source = ENV["LIBDATADOG_SOURCE"]
+    tag = ENV["LIBDATADOG_TAG"]
+    ref = ENV["LIBDATADOG_COMMIT"]
     features = ENV["LIBDATADOG_FEATURES"]
-    install_cmd = BuildFromSource::Builder.cargo_install_cmd(source: source, features: features)
 
-    info = source ? "local: #{source}" : "v#{Libdatadog::LIB_VERSION}"
+    install_cmd = BuildFromSource::Builder.cargo_install_cmd(source: source, tag: tag, ref: ref, features: features)
+
+    info =
+      if source
+        "local: #{source}"
+      elsif tag
+        "tag #{tag}"
+      elsif ref
+        "commit #{ref}"
+      else
+        "v#{Libdatadog::LIB_VERSION}"
+      end
     puts "Installing builder (#{info})..."
     system(*install_cmd) || raise("Failed to install builder via cargo")
 

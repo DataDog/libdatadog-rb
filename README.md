@@ -12,6 +12,33 @@ Otherwise, this is possibly not the droid you were looking for.
 Run `bundle exec rake` to run the tests and the style autofixer.
 You can also run `bundle exec pry` for an interactive prompt that will allow you to experiment.
 
+### Building from source
+
+`bundle exec rake libdatadog:build` builds libdatadog from source for the current platform
+using libdatadog's own [`builder` crate](https://github.com/DataDog/libdatadog/tree/main/builder).
+It requires a Rust toolchain (plus `cmake` and autotools); the Nix dev shell provides all of these.
+Artifacts are written to `vendor/libdatadog-<LIB_VERSION>/<platform>/`.
+
+By default it builds the pinned `v<LIB_VERSION>` tag. The following environment variables
+select what gets built. They are optional and **mutually exclusive** — set at most one
+(setting more than one fails):
+
+- `LIBDATADOG_TAG` — build a specific git tag, e.g. `LIBDATADOG_TAG=v33.0.0`.
+- `LIBDATADOG_COMMIT` — build a specific commit, e.g. `LIBDATADOG_COMMIT=<sha>`.
+- `LIBDATADOG_SOURCE` — build from a local libdatadog checkout, e.g. `LIBDATADOG_SOURCE=/path/to/libdatadog`.
+  To build a branch, check it out locally and point this at the checkout.
+
+Independently of the above, `LIBDATADOG_FEATURES` sets a comma-separated cargo feature
+override and applies to any build.
+
+Tag and commit builds pass `cargo install --locked`, so they reproducibly use the dependency
+versions pinned in libdatadog's `Cargo.lock`. Local-source builds omit `--locked`, since the
+checkout may be modified.
+
+```sh
+LIBDATADOG_COMMIT=<sha> bundle exec rake libdatadog:build
+```
+
 ### Testing packaging locally
 
 You can use `bundle exec rake package` to generate packages locally without publishing them.

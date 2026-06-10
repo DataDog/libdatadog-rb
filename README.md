@@ -17,26 +17,31 @@ You can also run `bundle exec pry` for an interactive prompt that will allow you
 `bundle exec rake libdatadog:build` builds libdatadog from source for the current platform
 using libdatadog's own [`builder` crate](https://github.com/DataDog/libdatadog/tree/main/builder).
 It requires a Rust toolchain (plus `cmake` and autotools); the Nix dev shell provides all of these.
-Artifacts are written to `vendor/libdatadog-<LIB_VERSION>/<platform>/`.
+The default build writes artifacts to `vendor/libdatadog-<LIB_VERSION>/<platform>/` (the
+location the gem is packaged from); explicit-ref builds (see below) write to a directory named
+after the ref instead, so they are not mislabeled as the pinned release.
 
-By default it builds the pinned `v<LIB_VERSION>` tag. The following environment variables
-select what gets built. They are optional and **mutually exclusive** — set at most one
-(setting more than one fails):
+By default it builds the pinned `v<LIB_VERSION>` tag. Set the optional `LIBDATADOG_REF`
+environment variable to build something else. Its value is always an explicit
+`<kind>:<value>` pair, where `kind` is one of:
 
-- `LIBDATADOG_TAG` — build a specific git tag, e.g. `LIBDATADOG_TAG=v33.0.0`.
-- `LIBDATADOG_COMMIT` — build a specific commit, e.g. `LIBDATADOG_COMMIT=<sha>`.
-- `LIBDATADOG_SOURCE` — build from a local libdatadog checkout, e.g. `LIBDATADOG_SOURCE=/path/to/libdatadog`.
-  To build a branch, check it out locally and point this at the checkout.
+- `tag` — a git tag, e.g. `LIBDATADOG_REF=tag:v33.0.0`.
+- `branch` — a git branch, e.g. `LIBDATADOG_REF=branch:my-feature`.
+- `commit` — a git commit, e.g. `LIBDATADOG_REF=commit:<sha>`.
+- `path` — a local libdatadog checkout, e.g. `LIBDATADOG_REF=path:/path/to/libdatadog`.
+
+The kind is always stated explicitly (no guessing), so a value without a recognized prefix
+fails fast. When `LIBDATADOG_REF` is unset, the pinned `v<LIB_VERSION>` tag is built.
 
 Independently of the above, `LIBDATADOG_FEATURES` sets a comma-separated cargo feature
 override and applies to any build.
 
-Tag and commit builds pass `cargo install --locked`, so they reproducibly use the dependency
-versions pinned in libdatadog's `Cargo.lock`. Local-source builds omit `--locked`, since the
-checkout may be modified.
+Git builds (tag/branch/commit) pass `cargo install --locked`, so they reproducibly use the
+dependency versions pinned in libdatadog's `Cargo.lock`. Local-path builds omit `--locked`,
+since the checkout may be modified.
 
 ```sh
-LIBDATADOG_COMMIT=<sha> bundle exec rake libdatadog:build
+LIBDATADOG_REF=commit:<sha> bundle exec rake libdatadog:build
 ```
 
 ### Testing packaging locally

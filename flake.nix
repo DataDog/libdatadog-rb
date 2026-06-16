@@ -27,11 +27,10 @@
           overlays = [ (import rust-overlay) ];
         };
 
-        # pinned Rust toolchain for building libdatadog from source. Keep this
-        # in sync with the libdatadog `rust-toolchain.toml` channel (and the CI
-        # `RUST_VERSION` in .github/workflows/build.yml) for the LIB_VERSION
-        # being packaged.
-        rust = pkgs.rust-bin.stable."1.87.0".minimal;
+        # pinned Rust toolchain for building libdatadog from source; single
+        # source of truth is ./rust-toolchain.toml (kept in sync with the
+        # libdatadog toolchain and the CI `RUST_VERSION`).
+        rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
         hook = ''
           # get major.minor.0 ruby version

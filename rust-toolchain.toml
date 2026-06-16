@@ -1,0 +1,6 @@
+[toolchain]
+# Rust toolchain used to build libdatadog from source. Keep the channel in sync
+# with the libdatadog `rust-toolchain.toml` for the LIB_VERSION being packaged
+# and with the CI `RUST_VERSION` in .github/workflows/build.yml.
+channel = "1.87.0"
+profile = "minimal"

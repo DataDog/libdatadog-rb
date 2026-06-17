@@ -33,6 +33,7 @@ jobs:
   complete:
     name: Main (complete)
     needs:
+      - build
       - test
       - nix
     runs-on: ubuntu-24.04

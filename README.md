@@ -14,23 +14,24 @@ You can also run `bundle exec pry` for an interactive prompt that will allow you
 
 ### Testing packaging locally
 
-You can use `bundle exec rake package` to generate packages locally without publishing them.
+First build the libdatadog binaries for your platform from source with
+`bundle exec rake libdatadog:build`, then package them into gems (without
+publishing) with `bundle exec rake gem:package`.
 
-TIP: If the test that checks for permissions ("gem release process ... sets the right permissions on the gem files"), fails you
-may need to run `umask 0022 && bundle exec rake package` so that the generated packages have the correct permissions.
+You can check the file permissions of the built gems with
+`bundle exec rake gem:validate`.
 
 ## Releasing a new version to rubygems.org
 
 Note: No Ruby needed to run this! It all runs in CI!
 
 1. [ ] Locate the new libdatadog release on GitHub: <https://github.com/datadog/libdatadog/releases>
-2. [ ] Update the `LIB_GITHUB_RELEASES` section of the `Rakefile` with the hashes from the new version
-3. [ ] In the <lib/libdatadog/version.rb> file:
+2. [ ] In the <lib/libdatadog/version.rb> file:
     - [ ] Update `LIB_VERSION` with the new version. Example: Setting "25.0.0" results in the first part of the string "25.0.0.1.0.x"
     - [ ] (OPTIONAL) Update `GEM_PRERELEASE_VERSION` with a prerelease descriptor. This is only needed if you want to do a prerelease. Example: Setting ".beta" results in "25.0.0.1.0.beta".
-4. [ ] Commit change, open PR, get it merged
-5. [ ] Trigger the "Publish" workflow in <https://github.com/DataDog/libdatadog-rb/actions/workflows/publish.yml>
-6. [ ] Verify that release shows up correctly on: <https://rubygems.org/gems/libdatadog>
+3. [ ] Commit change, open PR, get it merged
+4. [ ] Trigger the "Build" workflow on `main` with the "Push gems to RubyGems.org" option enabled: <https://github.com/DataDog/libdatadog-rb/actions/workflows/build.yml>
+5. [ ] Verify that release shows up correctly on: <https://rubygems.org/gems/libdatadog>
 
 ## Contributing
 

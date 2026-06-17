@@ -328,3 +328,12 @@ jobs:
       - uses: rubygems/release-gem@6317d8d1f7e28c24d28f6eff169ea854948bd9f7 # v1.2.0
         with:
           token: ${{ steps.octo-sts.outputs.token }}
+
+  complete:
+    name: Build (complete)
+    # Depends on the validation jobs, not on publish: publish is conditional
+    # (only on push to main) and would otherwise leave this job skipped on PRs.
+    needs: [validate-linux, validate-macos]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "DONE!"

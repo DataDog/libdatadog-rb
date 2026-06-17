@@ -300,8 +300,6 @@ jobs:
     if: inputs.push && github.ref == 'refs/heads/main'
     needs: [validate-linux, validate-macos]
     runs-on: ubuntu-24.04
-    container:
-      image: ghcr.io/datadog/images-rb/engines/ruby:4.0
     environment: rubygems.org
     concurrency: publish
     permissions:
@@ -310,6 +308,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # 1.310.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
       - run: bundle install
       - name: Download pre-built gems into pkg/
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

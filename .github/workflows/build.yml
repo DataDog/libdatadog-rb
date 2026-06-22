@@ -303,28 +303,53 @@ jobs:
     environment: rubygems.org
     concurrency: publish
     permissions:
-      id-token: write
+      id-token: write # trusted-publishing OIDC exchange AND sigstore keyless signing
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # 1.310.0
-        with:
-          ruby-version: "4.0"
-          bundler-cache: true
-      - run: bundle install
       - name: Download pre-built gems into pkg/
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: gem-*
           merge-multiple: true
           path: pkg
-      - uses: DataDog/dd-octo-sts-action@96a25462dbcb10ebf0bfd6e2ccc917d2ab235b9a # v1.0.4
-        id: octo-sts
-        with:
-          scope: DataDog/libdatadog-rb
-          policy: self.publish
-      - uses: rubygems/release-gem@6317d8d1f7e28c24d28f6eff169ea854948bd9f7 # v1.2.0
-        with:
-          token: ${{ steps.octo-sts.outputs.token }}
+      # Exchange the GitHub Actions OIDC token for a short-lived RubyGems API
+      # key (trusted publishing) and expose it via GEM_HOST_API_KEY. This runs
+      # on the host; the key is passed into the container below.
+      - uses: rubygems/configure-rubygems-credentials@bc6dd217f8a4f919d6835fcfefd470ef821f5c44 # v1.0.0
+      # Run the gem tooling inside a pinned, runtime-only image rather than on
+      # the host. The workspace is mounted at the same path so the vendored
+      # patch and the pkg/ gems resolve identically inside the container.
+      - name: Start container
+        run: docker run --rm --detach --name publish --volume "${PWD}:${PWD}" -w "${PWD}" ghcr.io/datadog/images-rb/engines/ruby:4.0-musl sleep 86400
+      - name: Install pinned publishing tools
+        run: |
+          docker exec publish sh -c '
+            gem install sigstore-cli -v 0.2.3
+            gem install rubygems-await -v 0.5.4
+          '
+      - name: Push gems with attestation
+        # The patch makes `gem push` sign each gem with sigstore-cli and attach
+        # the attestation to the upload. GEM_HOST_API_KEY authorizes the push;
+        # the ACTIONS_ID_TOKEN_REQUEST_* vars let sigstore-cli mint its OIDC
+        # signing identity from inside the container.
+        run: |
+          docker exec \
+            --env GEM_HOST_API_KEY \
+            --env ACTIONS_ID_TOKEN_REQUEST_URL \
+            --env ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+            --env RUBYOPT="-r${PWD}/.github/scripts/rubygems-attestation-patch.rb" \
+            publish sh -c '
+              export PATH="$(ruby -e "print Gem.bindir"):$PATH"
+              for gem in pkg/*.gem; do gem push "$gem"; done
+            '
+      - name: Wait for the gems to be available on RubyGems.org
+        run: |
+          docker exec publish sh -c '
+            export PATH="$(ruby -e "print Gem.bindir"):$PATH"
+            rubygems-await pkg/*.gem
+          '
+      - name: Stop container
+        if: always()
+        run: docker stop publish || true

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "etc"
+require "fileutils"
 require "pathname"
 
 module BuildFromSource
@@ -76,6 +77,31 @@ module BuildFromSource
 
       def vendor_target(ruby_platform = Target.ruby_platform)
         vendor / ruby_platform
+      end
+    end
+  end
+
+  module Permissions
+    # Files that must be executable (0755) in the gem; everything else 0644.
+    # Note: .so for Linux, .dylib for macOS.
+    EXECUTABLE_FILES = %w[
+      libdatadog-crashtracking-receiver
+      libdatadog_profiling.so
+      libdatadog_profiling.dylib
+    ].freeze
+
+    # Normalise file permissions of the built artifacts before packaging.
+    def self.fix(directory)
+      Dir.glob("#{directory}/**/*").each do |path|
+        next unless File.file?(path)
+
+        filename = File.basename(path)
+        current = File.stat(path).mode & 0o777
+        expected = EXECUTABLE_FILES.include?(filename) ? 0o755 : 0o644
+        next if current == expected
+
+        puts "Fixing permissions for #{filename}: #{current.to_s(8)} -> #{expected.to_s(8)}"
+        FileUtils.chmod(expected, path)
       end
     end
   end
@@ -160,7 +186,7 @@ namespace :libdatadog do
     system(env, paths.builder_bin.to_s, "--out", target_dir.to_s) || raise("Builder failed")
 
     # Fix file permissions to match expected values for packaging
-    Helpers.fix_file_permissions(target_dir.to_s)
+    BuildFromSource::Permissions.fix(target_dir)
 
     puts "Done! Artifacts in #{target_dir}"
   end

@@ -7,10 +7,6 @@ require "zlib"
 require "stringio"
 
 # Builds .gem packages from vendored libdatadog artifacts.
-#
-# Intentionally duplicates some Rakefile logic so both can coexist during
-# the migration; the Rakefile originals will be removed once the new tasks
-# are fully adopted.
 module GemPackaging
   module Platform
     # Mapping from gem platform names to the vendor platform directories

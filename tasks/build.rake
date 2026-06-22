@@ -106,6 +106,68 @@ module BuildFromSource
     end
   end
 
+  module Headers
+    # Strip intra-file duplicate typedefs from every common.h found under
+    # `directory`.
+    #
+    # cbindgen can emit the same typedef from multiple crate boundaries, and
+    # libdatadog's own `dedup_headers` tool only removes child-vs-base header
+    # duplicates, not these intra-common.h ones. Left in place they trip
+    # consumers compiling with `-Werror -Wtypedef-redefinition` (e.g.
+    # dd-trace-rb CI). This is a build-time workaround until a libdatadog
+    # release ships a clean header.
+    def self.dedup_common_headers(directory)
+      Dir.glob("#{directory}/**/include/datadog/common.h").each do |header|
+        dedup_common_header(header)
+      end
+    end
+
+    # Remove duplicate typedefs from a single common.h. Idempotent: only
+    # genuine duplicates are removed, so re-running is a no-op. Returns the
+    # number of typedefs removed.
+    def self.dedup_common_header(path)
+      content = File.read(path)
+
+      # Remove multiline typedef redefinitions: a "typedef struct X X;" forward
+      # declaration where the full "} X;" body is also present (in either order).
+      multiline_dupes = 0
+      content = content.gsub(/^typedef struct (\w+) \1;\n/) do |match|
+        name = $1
+        if content.include?("} #{name};")
+          multiline_dupes += 1
+          ""
+        else
+          match
+        end
+      end
+
+      # Remove identical single-line typedef duplicates (e.g. opaque pointer
+      # typedefs like "typedef struct X *Y;" emitted twice). Only exact
+      # duplicate lines are dropped; the first occurrence is always kept.
+      seen = {}
+      lines = content.lines
+      before = lines.size
+      lines.reject! do |line|
+        single_line_typedef = line.start_with?("typedef ") && line.rstrip.end_with?(";")
+        next false unless single_line_typedef
+
+        duplicate = seen.key?(line)
+        seen[line] = true
+        duplicate
+      end
+      singleline_dupes = before - lines.size
+
+      removed = multiline_dupes + singleline_dupes
+      if removed > 0
+        puts "Removed #{multiline_dupes} multiline and #{singleline_dupes} single-line " \
+             "duplicate typedef(s) from #{path}"
+        File.write(path, lines.join)
+      end
+
+      removed
+    end
+  end
+
   module Builder
     class << self
       # Build the cargo install command for the builder crate's `release` binary.
@@ -187,6 +249,10 @@ namespace :libdatadog do
 
     # Fix file permissions to match expected values for packaging
     BuildFromSource::Permissions.fix(target_dir)
+
+    # Strip intra-file duplicate typedefs from the vendored common.h so the
+    # packaged headers compile cleanly under -Werror -Wtypedef-redefinition.
+    BuildFromSource::Headers.dedup_common_headers(target_dir.to_s)
 
     puts "Done! Artifacts in #{target_dir}"
   end

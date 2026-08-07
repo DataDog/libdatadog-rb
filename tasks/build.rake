@@ -70,13 +70,15 @@ module BuildFromSource
         tmp / "cmake-out"
       end
 
-      # Vendor output tree
-      def vendor
-        root / "vendor" / "libdatadog-#{Libdatadog::LIB_VERSION}"
+      # Vendor output tree. `label` names the build (default: the pinned LIB_VERSION,
+      # which is the canonical, packageable location); explicit refs use a ref-derived
+      # label so artifacts are not mislabeled as the pinned release.
+      def vendor(label = Libdatadog::LIB_VERSION)
+        root / "vendor" / "libdatadog-#{label}"
       end
 
-      def vendor_target(ruby_platform = Target.ruby_platform)
-        vendor / ruby_platform
+      def vendor_target(ruby_platform = Target.ruby_platform, label: Libdatadog::LIB_VERSION)
+        vendor(label) / ruby_platform
       end
     end
   end
@@ -107,27 +109,65 @@ module BuildFromSource
   end
 
   module Builder
+    LIBDATADOG_GIT_URL = "https://github.com/DataDog/libdatadog"
+
+    # Cargo flag used for each git ref kind.
+    GIT_FLAG = {tag: "--tag", branch: "--branch", commit: "--rev"}.freeze
+
+    # Recognized "<kind>:<value>" ref kinds: a local path plus the git ref kinds above.
+    VALID_KINDS = [:path, *GIT_FLAG.keys].freeze
+
     class << self
       # Build the cargo install command for the builder crate's `release` binary.
       #
-      # source:   optional path to a local libdatadog checkout
-      # features: optional comma-separated feature override
-      def cargo_install_cmd(source: nil, features: nil)
+      # The libdatadog code to build is selected by `ref`, an explicit "<kind>:<value>"
+      # string where kind is one of:
+      #   path   — a local libdatadog checkout. Built via --path, WITHOUT --locked,
+      #            since the checkout may be modified locally.
+      #   tag    — a git tag.    Built via --git --tag <value> --locked.
+      #   branch — a git branch. Built via --git --branch <value> --locked.
+      #   commit — a git commit. Built via --git --rev <value> --locked.
+      # When ref is blank, defaults to the pinned --tag v<LIB_VERSION> --locked.
+      #
+      # Git builds pass --locked so they reproducibly use libdatadog's Cargo.lock.
+      # features: optional comma-separated cargo feature override, appended in all cases.
+      def cargo_install_cmd(ref: nil, features: nil)
+        kind, value = ref ? parse_ref(ref) : [:tag, "v#{Libdatadog::LIB_VERSION}"]
+
         cmd = %W[cargo install --bin release --root #{Paths.builder_root} --force]
 
-        cmd += if source
-          ["--path", (Pathname.new(source).expand_path / "builder").to_s]
+        cmd += if kind == :path
+          ["--path", (Pathname.new(value).expand_path / "builder").to_s]
         else
-          [
-            "--git", "https://github.com/DataDog/libdatadog",
-            "--tag", "v#{Libdatadog::LIB_VERSION}",
-            "builder"
-          ]
+          ["--git", LIBDATADOG_GIT_URL, GIT_FLAG.fetch(kind), value, "--locked", "builder"]
         end
 
         cmd += ["--no-default-features", "--features", features] if features
 
         cmd
+      end
+
+      # Parse an explicit "<kind>:<value>" ref into [kind_symbol, value].
+      # No auto-detection: a value with an unrecognized/missing kind prefix or an
+      # empty value is an error.
+      def parse_ref(ref)
+        kind, value = ref.split(":", 2)
+        kind = kind.to_sym if kind
+
+        unless VALID_KINDS.include?(kind) && value && !value.empty?
+          raise %(LIBDATADOG_REF must be "<kind>:<value>" where kind is one of ) +
+            %(#{VALID_KINDS.join(", ")} (e.g. tag:v33.0.0); got #{ref.inspect})
+        end
+
+        [kind, value]
+      end
+
+      # Vendor directory label for a parsed ref ("libdatadog-<label>"). Derived from
+      # the ref value (path => its basename), with path separators and whitespace
+      # squashed to "-" so the result is a safe single directory name.
+      def vendor_label(kind, value)
+        label = (kind == :path) ? File.basename(value) : value
+        label.gsub(%r{[/\s]+}, "-")
       end
 
       # Environment variables required by the builder binary at runtime.
@@ -165,17 +205,38 @@ namespace :libdatadog do
     ruby_platform = BuildFromSource::Target.ruby_platform(host_triple)
     paths = BuildFromSource::Paths
 
-    # Install builder binary
-    source = ENV["LIBDATADOG_SOURCE"]
-    features = ENV["LIBDATADOG_FEATURES"]
-    install_cmd = BuildFromSource::Builder.cargo_install_cmd(source: source, features: features)
+    # Install builder binary. What to build is selected by LIBDATADOG_REF, an explicit
+    # "<kind>:<value>" string (kind: path / tag / branch / commit); parsing, validation
+    # and the default are handled by cargo_install_cmd.
+    #
+    # Hard cut: the old per-kind vars are gone. Fail loudly instead of silently ignoring them.
+    old = %w[LIBDATADOG_SOURCE LIBDATADOG_TAG LIBDATADOG_COMMIT].select { |v| ENV[v] }
+    unless old.empty?
+      raise "#{old.join(", ")} no longer supported; use LIBDATADOG_REF (e.g. LIBDATADOG_REF=tag:v33.0.0)"
+    end
 
-    info = source ? "local: #{source}" : "v#{Libdatadog::LIB_VERSION}"
+    ref = ENV["LIBDATADOG_REF"]
+    features = ENV["LIBDATADOG_FEATURES"]
+
+    install_cmd = BuildFromSource::Builder.cargo_install_cmd(ref: ref, features: features)
+
+    # Derive the build's human label (logged) and vendor directory label (where
+    # artifacts land) from the ref, so explicit refs are not mislabeled as the
+    # pinned release. The default build keeps the canonical LIB_VERSION location.
+    if ref && !ref.empty?
+      kind, value = BuildFromSource::Builder.parse_ref(ref)
+      info = {path: "local: #{value}", tag: "tag #{value}",
+              branch: "branch #{value}", commit: "commit #{value}"}.fetch(kind)
+      label = BuildFromSource::Builder.vendor_label(kind, value)
+    else
+      info = "v#{Libdatadog::LIB_VERSION}"
+      label = Libdatadog::LIB_VERSION
+    end
     puts "Installing builder (#{info})..."
     system(*install_cmd) || raise("Failed to install builder via cargo")
 
     # Prepare output directories
-    target_dir = paths.vendor_target(ruby_platform)
+    target_dir = paths.vendor_target(ruby_platform, label: label)
     [target_dir, paths.cargo_target, paths.cmake_out].each(&:mkpath)
 
     # Invoke builder
@@ -191,9 +252,12 @@ namespace :libdatadog do
     puts "Done! Artifacts in #{target_dir}"
   end
 
-  desc "Remove build intermediates and vendor tree"
+  desc "Remove build intermediates and all vendored libdatadog trees"
   task :clean do
-    [BuildFromSource::Paths.tmp, BuildFromSource::Paths.vendor].each do |dir|
+    paths = BuildFromSource::Paths
+    # Removes every vendor/libdatadog-* directory (any ref label, plus downloaded
+    # release versions), along with the build intermediates.
+    [paths.tmp, *paths.root.glob("vendor/libdatadog-*")].each do |dir|
       if dir.exist?
         puts "Removing #{dir}"
         dir.rmtree

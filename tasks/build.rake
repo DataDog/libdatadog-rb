@@ -107,6 +107,8 @@ module BuildFromSource
   end
 
   module Builder
+    REQUIRED_EXTRA_FEATURES = %w[otel-thread-ctx].freeze
+
     class << self
       # Build the cargo install command for the builder crate's `release` binary.
       #
@@ -125,7 +127,16 @@ module BuildFromSource
           ]
         end
 
-        cmd += ["--no-default-features", "--features", features] if features
+        if features
+          missing_extra_features = REQUIRED_EXTRA_FEATURES - features.split(",").map(&:strip)
+          if missing_extra_features.any?
+            warn "default feature set is replaced, missing required extra features: #{missing_extra_features.join(",")}"
+          end
+
+          cmd += ["--no-default-features", "--features", features]
+        else
+          cmd += ["--features", REQUIRED_EXTRA_FEATURES.join(",")]
+        end
 
         cmd
       end

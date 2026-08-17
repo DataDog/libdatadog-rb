@@ -127,10 +127,10 @@ module BuildFromSource
           ]
         end
 
-        if features
-          cmd += ["--no-default-features", "--features", features]
+        cmd += if features
+          ["--no-default-features", "--features", features]
         else
-          cmd += ["--features", REQUIRED_EXTRA_FEATURES.join(",")]
+          ["--features", REQUIRED_EXTRA_FEATURES.join(",")]
         end
 
         cmd

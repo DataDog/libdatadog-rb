@@ -50,7 +50,7 @@ jobs:
     name: Build (${{ matrix.platform.ruby_platform }})
     runs-on: ${{ matrix.platform.base }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Start container
         run: docker run --rm --detach --name build --volume "${PWD}:${PWD}" -w "${PWD}" ${{ matrix.platform.image }} sleep 86400
       - name: Install dependencies
@@ -133,8 +133,8 @@ jobs:
     name: Build (${{ matrix.platform.ruby_platform }})
     runs-on: ${{ matrix.platform.base }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
           ruby-version: "4.0"
           bundler-cache: true
@@ -175,8 +175,8 @@ jobs:
     needs: [build-linux, build-macos]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
           ruby-version: "4.0"
           bundler-cache: true
@@ -245,7 +245,7 @@ jobs:
             raise "pkgconfig_folder is nil" unless Libdatadog.pkgconfig_folder
             raise "crashtracking receiver not found" unless Libdatadog.path_to_crashtracking_receiver_binary
           '
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: spec/smoke
       - name: Smoke test (compile and run C program against libdatadog)
@@ -267,7 +267,7 @@ jobs:
     needs: [package]
     runs-on: ${{ matrix.platform.base }}
     steps:
-      - uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
           ruby-version: "4.0"
       - name: Download gem
@@ -289,7 +289,7 @@ jobs:
             raise "pkgconfig_folder is nil" unless Libdatadog.pkgconfig_folder
             raise "crashtracking receiver not found" unless Libdatadog.path_to_crashtracking_receiver_binary
           '
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: spec/smoke
       - name: Smoke test (compile and run C program against libdatadog)
@@ -305,11 +305,11 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Ruby
-        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # 1.310.0
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # 1.321.0
         with:
           ruby-version: "4.0"
           bundler-cache: true
@@ -325,7 +325,7 @@ jobs:
         with:
           scope: DataDog/libdatadog-rb
           policy: self.publish
-      - uses: rubygems/release-gem@6317d8d1f7e28c24d28f6eff169ea854948bd9f7 # v1.2.0
+      - uses: rubygems/release-gem@7f9650160c1a4e7989fdc9855807bdbd421d8b6b # v1.4.1
         with:
           token: ${{ steps.octo-sts.outputs.token }}
 

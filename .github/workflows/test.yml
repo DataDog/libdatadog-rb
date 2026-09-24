@@ -46,8 +46,8 @@ jobs:
     name: Ruby ${{ matrix.ruby.version }} (${{ matrix.platform.cpu }}-${{ matrix.platform.os }})
     runs-on: ${{ matrix.platform.base }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      - uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # 1.310.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # 1.321.0
         with:
           ruby-version: ${{ matrix.ruby.version }}
           bundler: ${{ matrix.ruby.bundler }}

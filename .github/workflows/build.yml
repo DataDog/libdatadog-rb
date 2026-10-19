@@ -329,6 +329,47 @@ jobs:
         with:
           token: ${{ steps.octo-sts.outputs.token }}
 
+  notify-consumers:
+    name: Notify consumers
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # 1.310.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: false
+      - name: Read gem version
+        id: gem
+        run: |
+          version=$(ruby -e 'require "./lib/libdatadog/version"; print Libdatadog::VERSION')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Get GitHub Token via dd-octo-sts
+        id: generate-token
+        uses: DataDog/dd-octo-sts-action@96a25462dbcb10ebf0bfd6e2ccc917d2ab235b9a # v1.0.4
+        with:
+          scope: DataDog/dd-trace-rb
+          policy: libdatadog-rb.notify-consumers
+      # There appears to be a race condition in token propagation, wait it out
+      - name: Wait for token propagation
+        run: sleep 30
+      - name: Dispatch to DataDog/dd-trace-rb
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          gh api "repos/DataDog/dd-trace-rb/dispatches" \
+            -f event_type=internal-dep-updated \
+            -f "client_payload[gem]=libdatadog" \
+            -f "client_payload[version]=${{ steps.gem.outputs.version }}" \
+            -f "client_payload[commit]=${{ github.sha }}" \
+            -f "client_payload[triggered_by]=${{ github.repository }}" \
+            -f "client_payload[source_run_url]=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
   complete:
     name: Build (complete)
     # Depends on the validation jobs, not on publish: publish is conditional

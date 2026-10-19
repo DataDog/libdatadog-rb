@@ -337,7 +337,6 @@ jobs:
   notify-consumers:
     name: Notify consumers
     needs: publish
-    if: inputs.push && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       id-token: write

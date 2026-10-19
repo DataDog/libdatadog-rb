@@ -304,6 +304,8 @@ jobs:
     concurrency: publish
     permissions:
       id-token: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -314,6 +316,9 @@ jobs:
           ruby-version: "4.0"
           bundler-cache: true
       - run: bundle install
+      - name: Read gem version
+        id: version
+        run: echo "version=$(ruby -e 'require "./lib/libdatadog/version"; print Libdatadog::VERSION')" >> "$GITHUB_OUTPUT"
       - name: Download pre-built gems into pkg/
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -332,23 +337,11 @@ jobs:
   notify-consumers:
     name: Notify consumers
     needs: publish
+    if: inputs.push && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # 1.310.0
-        with:
-          ruby-version: "4.0"
-          bundler-cache: false
-      - name: Read gem version
-        id: gem
-        run: |
-          version=$(ruby -e 'require "./lib/libdatadog/version"; print Libdatadog::VERSION')
-          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Get GitHub Token via dd-octo-sts
         id: generate-token
         uses: DataDog/dd-octo-sts-action@96a25462dbcb10ebf0bfd6e2ccc917d2ab235b9a # v1.0.4
@@ -361,11 +354,12 @@ jobs:
       - name: Dispatch to DataDog/dd-trace-rb
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          VERSION: ${{ needs.publish.outputs.version }}
         run: |
           gh api "repos/DataDog/dd-trace-rb/dispatches" \
             -f event_type=internal-dep-updated \
             -f "client_payload[gem]=libdatadog" \
-            -f "client_payload[version]=${{ steps.gem.outputs.version }}" \
+            -f "client_payload[version]=$VERSION" \
             -f "client_payload[commit]=${{ github.sha }}" \
             -f "client_payload[triggered_by]=${{ github.repository }}" \
             -f "client_payload[source_run_url]=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

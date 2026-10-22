@@ -32,6 +32,7 @@ Note: No Ruby needed to run this! It all runs in CI!
 3. [ ] Commit change, open PR, get it merged
 4. [ ] Trigger the "Build" workflow on `main` with the "Push gems to RubyGems.org" option enabled: <https://github.com/DataDog/libdatadog-rb/actions/workflows/build.yml>
 5. [ ] Verify that release shows up correctly on: <https://rubygems.org/gems/libdatadog>
+6. [ ] The same Build run notifies dd-trace-rb, which opens a PR pinning the new version.
 
 ## Contributing
 

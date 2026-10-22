@@ -1,0 +1,16 @@
+issuer: https://token.actions.githubusercontent.com
+
+# Caller: libdatadog's notify-libdatadog-rb workflow, triggered by pushing a
+# plain `v*` tag (libdatadog crate releases only -- libdd-* crates use
+# prefixed tags). Tag pushes require write access to DataDog/libdatadog, and
+# the workflow is pinned so only the reviewed definition can mint this token.
+# Add a ref_protected claim once tag protection rules cover release tags.
+subject_pattern: "repo:DataDog/libdatadog:ref:refs/tags/v*"
+
+claim_pattern:
+  event_name: push
+  repository: DataDog/libdatadog
+  job_workflow_ref: DataDog/libdatadog/\.github/workflows/notify-libdatadog-rb\.yml@refs/tags/.+
+
+permissions:
+  contents: write

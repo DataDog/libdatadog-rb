@@ -33,30 +33,12 @@ jobs:
           persist-credentials: false
 
       # libdatadog's notify workflow sends the dispatch over an octo-sts
-      # trust policy. Still validate the payload before writing anything.
-      - name: Validate dispatched version
+      # trust policy. The script validates the version, skips anything at or
+      # below the current pin (it emits skip=true for that), and otherwise
+      # bumps LIB_VERSION in lib/libdatadog/version.rb.
+      - name: Update LIB_VERSION to ${{ env.VERSION }}
         id: check
-        run: |
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Invalid libdatadog version dispatched: '$VERSION'"
-            exit 1
-          fi
-          CURRENT=$(ruby -e 'require "./lib/libdatadog/version"; print Libdatadog::LIB_VERSION')
-          echo "Current LIB_VERSION: $CURRENT, dispatched: $VERSION"
-          # This repo keeps a single pin and its consumers track the latest
-          # release, so an older maintenance-line tag or a replayed dispatch
-          # is a no-op rather than a downgrade PR.
-          if ruby -rrubygems -e 'exit(Gem::Version.new(ARGV[0]) <= Gem::Version.new(ARGV[1]) ? 0 : 1)' "$VERSION" "$CURRENT"; then
-            echo "LIB_VERSION $CURRENT is already at or above $VERSION; nothing to do."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Only LIB_VERSION moves on an upstream bump: the gem version scheme
-      # (lib_version.gem_major.gem_minor) keeps its own counters, and past
-      # bumps like 45.0.0 -> 46.0.0 touched this line alone.
-      - name: Bump LIB_VERSION to ${{ env.VERSION }}
-        if: steps.check.outputs.skip != 'true'
-        run: sed -i "s/^  LIB_VERSION = \".*\"/  LIB_VERSION = \"${VERSION}\"/" lib/libdatadog/version.rb
+        run: .github/scripts/update-libdatadog-version "$VERSION"
 
       - name: Show diff
         if: steps.check.outputs.skip != 'true'

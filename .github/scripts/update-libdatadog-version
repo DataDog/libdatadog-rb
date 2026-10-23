@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Update the LIB_VERSION pin in lib/libdatadog/version.rb.
+#
+# Usage: .github/scripts/update-libdatadog-version <major.minor.patch>
+#
+# - newer than the current pin: rewrites LIB_VERSION and exits 0
+# - equal to or older than the pin: no-op. Prints the reason, exits 0,
+#   and sets skip=true in $GITHUB_OUTPUT under GitHub Actions, so the
+#   update-from-libdatadog workflow can gate its later steps on it.
+#   This repo keeps a single pin and its consumers track the latest
+#   release, so an older maintenance-line tag or a replayed dispatch
+#   is a no-op rather than a downgrade.
+# - malformed version: exits 1.
+#
+# Only LIB_VERSION moves: the gem version scheme
+# (lib_version.gem_major.gem_minor) keeps its own counters, and past
+# bumps like 45.0.0 -> 46.0.0 touched this line alone.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+VERSION_FILE="$REPO_ROOT/lib/libdatadog/version.rb"
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $0 <major.minor.patch>" >&2
+  exit 1
+fi
+VERSION="$1"
+
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+  echo "::error::Invalid libdatadog version: '$VERSION'" >&2
+  exit 1
+fi
+
+CURRENT=$(cd "$REPO_ROOT" && ruby -e 'require "./lib/libdatadog/version"; print Libdatadog::LIB_VERSION')
+echo "Current LIB_VERSION: $CURRENT, requested: $VERSION"
+
+if ruby -rrubygems -e 'exit(Gem::Version.new(ARGV[0]) <= Gem::Version.new(ARGV[1]) ? 0 : 1)' "$VERSION" "$CURRENT"; then
+  echo "LIB_VERSION $CURRENT is already at or above $VERSION; nothing to do."
+  if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    echo "skip=true" >> "$GITHUB_OUTPUT"
+  fi
+  exit 0
+fi
+
+sed -i.bak "s/^  LIB_VERSION = \".*\"/  LIB_VERSION = \"${VERSION}\"/" "$VERSION_FILE"
+rm -f "$VERSION_FILE.bak"
+
+echo "Bumped LIB_VERSION to $VERSION."

@@ -1,0 +1,18 @@
+issuer: https://token.actions.githubusercontent.com
+
+# Caller: libdatadog's notify-libdatadog-rb workflow, triggered by pushing a
+# `v<major>.<minor>.<patch>` release tag (libdd-* crates use prefixed tags).
+# Tag pushes require write access to DataDog/libdatadog, and the workflow is
+# pinned so only the reviewed definition can mint this token. Add a
+# ref_protected claim once tag protection rules cover release tags.
+# Note: octo-sts patterns are anchored regexes, so `v.*` is "v followed by
+# anything". The version-shape filtering lives in the workflow trigger.
+subject_pattern: "repo:DataDog/libdatadog:ref:refs/tags/v.*"
+
+claim_pattern:
+  event_name: push
+  repository: DataDog/libdatadog
+  job_workflow_ref: DataDog/libdatadog/\.github/workflows/notify-libdatadog-rb\.yml@refs/tags/.+
+
+permissions:
+  contents: write

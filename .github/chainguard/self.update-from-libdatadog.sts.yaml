@@ -1,0 +1,15 @@
+issuer: https://token.actions.githubusercontent.com
+
+subject_pattern: "repo:DataDog/libdatadog-rb:ref:refs/heads/main"
+
+# Caller: the update-from-libdatadog workflow reacting to a
+# libdatadog-released dispatch from DataDog/libdatadog. repository_dispatch
+# events run only from the default branch.
+claim_pattern:
+  event_name: repository_dispatch
+  repository: DataDog/libdatadog-rb
+  job_workflow_ref: DataDog/libdatadog-rb/\.github/workflows/update-from-libdatadog\.yml@refs/heads/main
+
+permissions:
+  contents: write
+  pull_requests: write

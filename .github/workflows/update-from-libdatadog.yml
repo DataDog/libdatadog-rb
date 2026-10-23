@@ -1,0 +1,91 @@
+name: Update from libdatadog
+
+# A libdatadog crate release (plain `v*` tag push on DataDog/libdatadog)
+# sends `libdatadog-released`, which starts this workflow. It bumps
+# LIB_VERSION in lib/libdatadog/version.rb and opens a draft PR. The main.yml
+# CI on that PR builds libdatadog from the new tag and validates it.
+
+on: # yamllint disable-line rule:truthy
+  repository_dispatch:
+    types: [libdatadog-released]
+
+# One group for the whole workflow: every run writes the same
+# auto-generate/update-libdatadog PR branch, so runs serialize instead of
+# racing on that branch.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+# Default permissions for all jobs
+permissions: {}
+
+jobs:
+  update-from-libdatadog:
+    name: "Update libdatadog to ${{ github.event.client_payload.version }}"
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+    env:
+      VERSION: ${{ github.event.client_payload.version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # libdatadog's notify workflow sends the dispatch over an octo-sts
+      # trust policy. The script validates the version, skips anything at or
+      # below the current pin (it emits skip=true for that), and otherwise
+      # bumps LIB_VERSION in lib/libdatadog/version.rb.
+      - name: Update LIB_VERSION to ${{ env.VERSION }}
+        id: check
+        run: .github/scripts/update-libdatadog-version "$VERSION"
+
+      - name: Show diff
+        if: steps.check.outputs.skip != 'true'
+        run: git diff --color=always
+
+      - name: Get GitHub Token via dd-octo-sts
+        id: generate-token
+        if: steps.check.outputs.skip != 'true'
+        uses: DataDog/dd-octo-sts-action@96a25462dbcb10ebf0bfd6e2ccc917d2ab235b9a # v1.0.4
+        with:
+          scope: DataDog/libdatadog-rb
+          policy: self.update-from-libdatadog
+
+      - name: Create Pull Request
+        if: steps.check.outputs.skip != 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          branch: auto-generate/update-libdatadog
+          title: "Update libdatadog to ${{ env.VERSION }}"
+          base: main
+          draft: true
+          delete-branch: true
+          sign-commits: true
+          commit-message: "build: update libdatadog to ${{ env.VERSION }}"
+          add-paths: lib/libdatadog/version.rb
+          body: |
+            ### Why
+
+            Routine maintenance: this repo builds against a pinned libdatadog release tag. This PR moves the pin upstream.
+
+            ### What
+
+            Updates `LIB_VERSION` to [${{ env.VERSION }}](https://github.com/DataDog/libdatadog/releases/tag/v${{ env.VERSION }}).
+
+            ### Risk
+
+            Two-way door, version pin. Revert restores the previous LIB_VERSION.
+
+            ### Details
+
+            <details><summary>Automation: merge when CI is green.</summary>
+
+            - Event: repository_dispatch (libdatadog-released)
+            - Triggered by: ${{ github.event.client_payload.triggered_by || 'unknown' }}
+            - Source run: ${{ github.event.client_payload.source_run_url || 'not provided' }}
+            - If CI fails right after the upstream tag lands, the libdd-* crates it needs may not be on crates.io yet. Re-run once they are published.
+            - Merging is not a release. Dispatch Build (push=false to validate, push=true to publish). dd-trace-rb then bumps its pin automatically.
+
+            </details>

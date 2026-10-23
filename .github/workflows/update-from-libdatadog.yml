@@ -9,12 +9,16 @@ on: # yamllint disable-line rule:truthy
   repository_dispatch:
     types: [libdatadog-released]
 
-# One group for the whole workflow: every run writes the same
-# auto-generate/update-libdatadog PR branch, so runs serialize instead of
-# racing on that branch.
+# One group for the whole workflow, with a deep queue: by default a
+# concurrency group keeps a single pending run and a newer pending run
+# cancels the older one, so back-to-back releases (patch backports on
+# older lines) get dropped. queue: max keeps up to 100 pending runs
+# instead. Runs serialize one at a time, each writing its own per-version
+# PR branch.
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
+  queue: max
 
 # Default permissions for all jobs
 permissions: {}
@@ -57,7 +61,11 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ steps.generate-token.outputs.token }}
-          branch: auto-generate/update-libdatadog
+          # One PR per version: a shared branch overwrites one version's PR
+          # with another's when two updates arrive close together. If a newer
+          # version's PR merges first, close the older line's PR -- merging it
+          # downgrades LIB_VERSION.
+          branch: auto-generate/update-libdatadog-${{ env.VERSION }}
           title: "Update libdatadog to ${{ env.VERSION }}"
           base: main
           draft: true

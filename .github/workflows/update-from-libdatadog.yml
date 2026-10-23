@@ -9,10 +9,11 @@ on: # yamllint disable-line rule:truthy
   repository_dispatch:
     types: [libdatadog-released]
 
-# Per-version group: a queued run for the same version replaces a pending
-# one, without cancelling a run already in progress.
+# One group for the whole workflow: every run writes the same
+# auto-generate/update-libdatadog PR branch, so runs serialize instead of
+# racing on that branch.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.client_payload.version }}
+  group: ${{ github.workflow }}
   cancel-in-progress: false
 
 # Default permissions for all jobs
@@ -42,8 +43,11 @@ jobs:
           fi
           CURRENT=$(ruby -e 'require "./lib/libdatadog/version"; print Libdatadog::LIB_VERSION')
           echo "Current LIB_VERSION: $CURRENT, dispatched: $VERSION"
-          if [ "$VERSION" = "$CURRENT" ]; then
-            echo "LIB_VERSION already at $CURRENT; nothing to do."
+          # This repo keeps a single pin and its consumers track the latest
+          # release, so an older maintenance-line tag or a replayed dispatch
+          # is a no-op rather than a downgrade PR.
+          if ruby -rrubygems -e 'exit(Gem::Version.new(ARGV[0]) <= Gem::Version.new(ARGV[1]) ? 0 : 1)' "$VERSION" "$CURRENT"; then
+            echo "LIB_VERSION $CURRENT is already at or above $VERSION; nothing to do."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -65,11 +69,6 @@ jobs:
         with:
           scope: DataDog/libdatadog-rb
           policy: self.update-from-libdatadog
-
-      # There appears to be a race condition in token propagation, wait it out
-      - name: Wait for token propagation
-        if: steps.check.outputs.skip != 'true'
-        run: sleep 30
 
       - name: Create Pull Request
         if: steps.check.outputs.skip != 'true'

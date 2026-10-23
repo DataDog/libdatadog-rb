@@ -1,9 +1,11 @@
 name: Update from libdatadog
 
-# A libdatadog crate release (plain `v*` tag push on DataDog/libdatadog)
-# sends `libdatadog-released`, which starts this workflow. It bumps
-# LIB_VERSION in lib/libdatadog/version.rb and opens a draft PR. The main.yml
-# CI on that PR builds libdatadog from the new tag and validates it.
+# A libdatadog crate release (tag push on DataDog/libdatadog) triggers the
+# upstream notify-libdatadog-rb shim, which runs notify-dispatch.yml from
+# upstream main. That workflow sends `libdatadog-released`, which starts
+# this receiver. It bumps LIB_VERSION in lib/libdatadog/version.rb and
+# opens a draft PR. The main.yml CI on that PR builds libdatadog from the
+# new tag and validates it.
 
 on: # yamllint disable-line rule:truthy
   repository_dispatch:
@@ -29,6 +31,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
+      contents: read # GitHub API reads of the public upstream repo (provenance)
     env:
       VERSION: ${{ github.event.client_payload.version }}
     steps:
@@ -36,13 +39,37 @@ jobs:
         with:
           persist-credentials: false
 
-      # libdatadog's notify workflow sends the dispatch over an octo-sts
-      # trust policy. The script validates the version, skips anything at or
-      # below the current pin (it emits skip=true for that), and otherwise
-      # bumps LIB_VERSION in lib/libdatadog/version.rb.
+      # libdatadog's notify-dispatch workflow (dispatched from upstream main)
+      # sends the event over an octo-sts trust policy. The script validates
+      # the version, skips anything at or below the current pin (it emits
+      # skip=true for that), and otherwise bumps LIB_VERSION in
+      # lib/libdatadog/version.rb.
       - name: Update LIB_VERSION to ${{ env.VERSION }}
         id: check
         run: .github/scripts/update-libdatadog-version "$VERSION"
+
+      # Facts for the merge decision, displayed in the PR body: what the tag
+      # points at, and whether that commit is reachable from upstream main.
+      # Maintenance-line releases (hotfixes) legitimately show "no" there.
+      # Neither check gates anything: upstream tag placement conventions
+      # vary by team and release.
+      - name: Collect upstream tag provenance
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(git ls-remote https://github.com/DataDog/libdatadog "refs/tags/v${VERSION}^{}" | cut -f1)
+          [ -n "$SHA" ] || SHA=$(git ls-remote https://github.com/DataDog/libdatadog "refs/tags/v${VERSION}" | cut -f1)
+          if [ -z "$SHA" ]; then
+            echo "::warning::Tag v${VERSION} not found on upstream; skipping provenance display."
+            exit 0
+          fi
+          SUBJECT=$(gh api "repos/DataDog/libdatadog/commits/${SHA}" --jq '.commit.message' | head -1)
+          STATUS=$(gh api "repos/DataDog/libdatadog/compare/main...${SHA}" --jq '.status')
+          case "$STATUS" in identical|behind) ON_MAIN=yes ;; *) ON_MAIN=no ;; esac
+          echo "TAG_SHA=$SHA" >> "$GITHUB_ENV"
+          echo "TAG_SUBJECT=$SUBJECT" >> "$GITHUB_ENV"
+          echo "TAG_ON_MAIN=$ON_MAIN" >> "$GITHUB_ENV"
 
       - name: Show diff
         if: steps.check.outputs.skip != 'true'
@@ -93,6 +120,7 @@ jobs:
             - Event: repository_dispatch (libdatadog-released)
             - Triggered by: ${{ github.event.client_payload.triggered_by || 'unknown' }}
             - Source run: ${{ github.event.client_payload.source_run_url || 'not provided' }}
+            - Tag provenance: commit `${{ env.TAG_SHA }}` ("${{ env.TAG_SUBJECT }}"), on upstream main: ${{ env.TAG_ON_MAIN || 'unknown' }}. Hotfix-line releases legitimately show "no" here.
             - If CI fails right after the upstream tag lands, the libdd-* crates it needs may not be on crates.io yet. Re-run once they are published.
             - Merging is not a release. Dispatch Build (push=false to validate, push=true to publish). dd-trace-rb then bumps its pin automatically.
 

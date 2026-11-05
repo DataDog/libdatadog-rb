@@ -1,0 +1,30 @@
+issuer: https://token.actions.githubusercontent.com
+
+# Caller: libdatadog's notify-downstreams-dispatch.yml workflow, resolved from
+# the default branch via workflow_run when notify-downstreams.yml (the
+# tag-push trigger) completes. The tag-push shim runs from the tagged commit
+# and holds no permissions. The octo-sts mint lives in
+# notify-downstreams-dispatch.yml on the default branch, and this policy
+# pins that file to main. Upstream adds one matrix entry per downstream. See
+# the workflow headers in DataDog/libdatadog for the full trust chain.
+#
+# What this policy actually grants: a job defined in
+# notify-downstreams-dispatch.yml as it exists on libdatadog main mints a
+# contents:write token on this
+# repository, used to send one repository_dispatch. Whoever can merge PRs to
+# upstream main can change what that token does. Upstream main carries the
+# org's branch rulesets and CODEOWNERS review. This is the same trust shape
+# as dd-trace-rb's self.lock-dependency policy. ref_protected
+# additionally asserts the dispatch ran on a protected main. If upstream's
+# branch rulesets ever disappear, mint fails loudly instead of trusting an
+# unprotected main.
+subject_pattern: "repo:DataDog/libdatadog:ref:refs/heads/main"
+
+claim_pattern:
+  event_name: workflow_run
+  repository: DataDog/libdatadog
+  job_workflow_ref: DataDog/libdatadog/\.github/workflows/notify-downstreams-dispatch\.yml@refs/heads/main
+  ref_protected: "true"
+
+permissions:
+  contents: write

@@ -1,11 +1,11 @@
 name: Update from libdatadog
 
 # A libdatadog crate release (tag push on DataDog/libdatadog) triggers the
-# upstream notify-libdatadog-rb shim, which runs notify-dispatch.yml from
-# upstream main. That workflow sends `libdatadog-released`, which starts
-# this receiver. It bumps LIB_VERSION in lib/libdatadog/version.rb and
-# opens a draft PR. The main.yml CI on that PR builds libdatadog from the
-# new tag and validates it.
+# upstream Notify Downstreams shim, which completes so that
+# notify-downstreams-dispatch.yml (resolved from upstream main) mints and
+# sends `libdatadog-released`, which starts this receiver. It bumps
+# LIB_VERSION in lib/libdatadog/version.rb and opens a draft PR. The main.yml
+# CI on that PR builds libdatadog from the new tag and validates it.
 
 on: # yamllint disable-line rule:truthy
   repository_dispatch:
@@ -39,10 +39,10 @@ jobs:
         with:
           persist-credentials: false
 
-      # libdatadog's notify-dispatch workflow (dispatched from upstream main)
-      # sends the event over an octo-sts trust policy. The script validates
-      # the version, skips anything at or below the current pin (it emits
-      # skip=true for that), and otherwise bumps LIB_VERSION in
+      # libdatadog's notify-downstreams-dispatch workflow (resolved from
+      # upstream main) sends the event over an octo-sts trust policy. The
+      # script validates the version, skips anything at or below the current
+      # pin (it emits skip=true for that), and otherwise bumps LIB_VERSION in
       # lib/libdatadog/version.rb.
       - name: Update LIB_VERSION to ${{ env.VERSION }}
         id: check

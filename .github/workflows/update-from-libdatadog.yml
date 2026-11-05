@@ -31,7 +31,6 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       id-token: write
-      contents: read # GitHub API reads of the public upstream repo (provenance)
     env:
       VERSION: ${{ github.event.client_payload.version }}
     steps:
@@ -48,28 +47,9 @@ jobs:
         id: check
         run: .github/scripts/update-libdatadog-version "$VERSION"
 
-      # Facts for the merge decision, displayed in the PR body: what the tag
-      # points at, and whether that commit is reachable from upstream main.
-      # Maintenance-line releases (hotfixes) legitimately show "no" there.
-      # Neither check gates anything: upstream tag placement conventions
-      # vary by team and release.
-      - name: Collect upstream tag provenance
-        if: steps.check.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          SHA=$(git ls-remote https://github.com/DataDog/libdatadog "refs/tags/v${VERSION}^{}" | cut -f1)
-          [ -n "$SHA" ] || SHA=$(git ls-remote https://github.com/DataDog/libdatadog "refs/tags/v${VERSION}" | cut -f1)
-          if [ -z "$SHA" ]; then
-            echo "::warning::Tag v${VERSION} not found on upstream; skipping provenance display."
-            exit 0
-          fi
-          SUBJECT=$(gh api "repos/DataDog/libdatadog/commits/${SHA}" --jq '.commit.message' | head -1)
-          STATUS=$(gh api "repos/DataDog/libdatadog/compare/main...${SHA}" --jq '.status')
-          case "$STATUS" in identical|behind) ON_MAIN=yes ;; *) ON_MAIN=no ;; esac
-          echo "TAG_SHA=$SHA" >> "$GITHUB_ENV"
-          echo "TAG_SUBJECT=$SUBJECT" >> "$GITHUB_ENV"
-          echo "TAG_ON_MAIN=$ON_MAIN" >> "$GITHUB_ENV"
+      # The event payload from upstream carries the whole release record:
+      # version, tag commit, source run. Nothing is fetched from upstream
+      # here. The PR body displays the tag commit from the payload.
 
       - name: Show diff
         if: steps.check.outputs.skip != 'true'
@@ -120,7 +100,7 @@ jobs:
             - Event: repository_dispatch (libdatadog-released)
             - Triggered by: ${{ github.event.client_payload.triggered_by || 'unknown' }}
             - Source run: ${{ github.event.client_payload.source_run_url || 'not provided' }}
-            - Tag provenance: commit `${{ env.TAG_SHA }}` ("${{ env.TAG_SUBJECT }}"), on upstream main: ${{ env.TAG_ON_MAIN || 'unknown' }}. Hotfix-line releases legitimately show "no" here.
+            - Tag commit: ${{ github.event.client_payload.tag_sha || 'unknown' }}
             - If CI fails right after the upstream tag lands, the libdd-* crates it needs may not be on crates.io yet. Re-run once they are published.
             - Merging is not a release. Dispatch Build (push=false to validate, push=true to publish). dd-trace-rb then bumps its pin automatically.
 

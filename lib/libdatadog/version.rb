@@ -2,7 +2,7 @@
 
 module Libdatadog
   # Current libdatadog version
-  LIB_VERSION = "46.1.0"
+  LIB_VERSION = "46.1.1"
 
   GEM_MAJOR_VERSION = "1"
   GEM_MINOR_VERSION = "1"

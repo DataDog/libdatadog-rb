@@ -1,7 +1,9 @@
 name: Update from libdatadog
 
-# A libdatadog crate release (plain `v*` tag push on DataDog/libdatadog)
-# sends `libdatadog-released`, which starts this workflow. It bumps
+# A libdatadog crate release (tag push on DataDog/libdatadog) triggers the
+# upstream Notify Downstreams shim, which completes so that
+# notify-downstreams-dispatch.yml (resolved from upstream main) mints and
+# sends `libdatadog-released`, which starts this receiver. It bumps
 # LIB_VERSION in lib/libdatadog/version.rb and opens a draft PR. The main.yml
 # CI on that PR builds libdatadog from the new tag and validates it.
 
@@ -9,12 +11,16 @@ on: # yamllint disable-line rule:truthy
   repository_dispatch:
     types: [libdatadog-released]
 
-# One group for the whole workflow: every run writes the same
-# auto-generate/update-libdatadog PR branch, so runs serialize instead of
-# racing on that branch.
+# One group for the whole workflow, with a deep queue: by default a
+# concurrency group keeps a single pending run and a newer pending run
+# cancels the older one, so back-to-back releases (patch backports on
+# older lines) get dropped. queue: max keeps up to 100 pending runs
+# instead. Runs serialize one at a time, each writing its own per-version
+# PR branch.
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
+  queue: max
 
 # Default permissions for all jobs
 permissions: {}
@@ -32,13 +38,18 @@ jobs:
         with:
           persist-credentials: false
 
-      # libdatadog's notify workflow sends the dispatch over an octo-sts
-      # trust policy. The script validates the version, skips anything at or
-      # below the current pin (it emits skip=true for that), and otherwise
-      # bumps LIB_VERSION in lib/libdatadog/version.rb.
+      # libdatadog's notify-downstreams-dispatch workflow (resolved from
+      # upstream main) sends the event over an octo-sts trust policy. The
+      # script validates the version, skips anything at or below the current
+      # pin (it emits skip=true for that), and otherwise bumps LIB_VERSION in
+      # lib/libdatadog/version.rb.
       - name: Update LIB_VERSION to ${{ env.VERSION }}
         id: check
         run: .github/scripts/update-libdatadog-version "$VERSION"
+
+      # The event payload from upstream carries the whole release record:
+      # version, tag commit, source run. Nothing is fetched from upstream
+      # here. The PR body displays the tag commit from the payload.
 
       - name: Show diff
         if: steps.check.outputs.skip != 'true'
@@ -57,7 +68,11 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ steps.generate-token.outputs.token }}
-          branch: auto-generate/update-libdatadog
+          # One PR per version: a shared branch overwrites one version's PR
+          # with another's when two updates arrive close together. If a newer
+          # version's PR merges first, close the older line's PR -- merging it
+          # downgrades LIB_VERSION.
+          branch: auto-generate/update-libdatadog-${{ env.VERSION }}
           title: "Update libdatadog to ${{ env.VERSION }}"
           base: main
           draft: true
@@ -85,6 +100,7 @@ jobs:
             - Event: repository_dispatch (libdatadog-released)
             - Triggered by: ${{ github.event.client_payload.triggered_by || 'unknown' }}
             - Source run: ${{ github.event.client_payload.source_run_url || 'not provided' }}
+            - Tag commit: ${{ github.event.client_payload.tag_sha || 'unknown' }}
             - If CI fails right after the upstream tag lands, the libdd-* crates it needs may not be on crates.io yet. Re-run once they are published.
             - Merging is not a release. Dispatch Build (push=false to validate, push=true to publish). dd-trace-rb then bumps its pin automatically.
 

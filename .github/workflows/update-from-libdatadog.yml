@@ -87,7 +87,7 @@ jobs:
 
             ### What
 
-            Updates `LIB_VERSION` to [${{ env.VERSION }}](https://github.com/DataDog/libdatadog/releases/tag/v${{ env.VERSION }}).
+            Updates `LIB_VERSION` to [${{ env.VERSION }}](https://github.com/DataDog/libdatadog/releases/tag/v${{ env.VERSION }}) and resets the gem-scoped revisions to `.0.0`.
 
             ### Risk
 

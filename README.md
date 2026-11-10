@@ -27,12 +27,18 @@ Note: No Ruby needed to run this! It all runs in CI!
 
 1. [ ] Locate the new libdatadog release on GitHub: <https://github.com/datadog/libdatadog/releases>
 2. [ ] In the <lib/libdatadog/version.rb> file:
-    - [ ] Update `LIB_VERSION` with the new version. Example: Setting "25.0.0" results in the first part of the string "25.0.0.1.0.x"
-    - [ ] (OPTIONAL) Update `GEM_PRERELEASE_VERSION` with a prerelease descriptor. This is only needed if you want to do a prerelease. Example: Setting ".beta" results in "25.0.0.1.0.beta".
+    - [ ] Update `LIB_VERSION` with the new version and reset `GEM_MAJOR_VERSION` and `GEM_MINOR_VERSION` to `"0"`. For example, a new upstream version "49.0.0" starts at gem version "49.0.0.0.0". The automated upstream updater performs these changes together.
+    - [ ] (OPTIONAL) Update `GEM_PRERELEASE_VERSION` with a prerelease descriptor. This is only needed if you want to do a prerelease. Example: Setting ".beta" results in "49.0.0.0.0.beta".
 3. [ ] Commit change, open PR, get it merged
 4. [ ] Trigger the "Build" workflow on `main` with the "Push gems to RubyGems.org" option enabled: <https://github.com/DataDog/libdatadog-rb/actions/workflows/build.yml>
 5. [ ] Verify that release shows up correctly on: <https://rubygems.org/gems/libdatadog>
 6. [ ] The same Build run notifies dd-trace-rb, which opens a PR pinning the new version.
+
+The two gem revision components are relative to `LIB_VERSION`. For another
+release of the same upstream version, increment `GEM_MINOR_VERSION` for a
+compatible wrapper or packaging fix, or increment `GEM_MAJOR_VERSION` and reset
+`GEM_MINOR_VERSION` for a breaking wrapper change. Reset both only when the
+upstream version changes; never renumber an already-published release.
 
 ## Contributing
 

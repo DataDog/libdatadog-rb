@@ -115,16 +115,17 @@ module BuildFromSource
       # source:   optional path to a local libdatadog checkout
       # features: optional comma-separated feature override
       def cargo_install_cmd(source: nil, features: nil)
-        cmd = %W[cargo install --bin release --root #{Paths.builder_root} --force]
+        cmd = %W[cargo install --locked --bin release --root #{Paths.builder_root} --force]
 
         cmd += if source
           ["--path", (Pathname.new(source).expand_path / "builder").to_s]
         else
-          [
-            "--git", "https://github.com/DataDog/libdatadog",
-            "--tag", "v#{Libdatadog::LIB_VERSION}",
-            "builder"
-          ]
+          reference = if Libdatadog::LIB_REVISION
+            ["--rev", Libdatadog::LIB_REVISION]
+          else
+            ["--tag", "v#{Libdatadog::LIB_VERSION}"]
+          end
+          ["--git", "https://github.com/DataDog/libdatadog", *reference, "builder"]
         end
 
         cmd += if features
@@ -176,7 +177,7 @@ namespace :libdatadog do
     features = ENV["LIBDATADOG_FEATURES"]
     install_cmd = BuildFromSource::Builder.cargo_install_cmd(source: source, features: features)
 
-    info = source ? "local: #{source}" : "v#{Libdatadog::LIB_VERSION}"
+    info = source ? "local: #{source}" : (Libdatadog::LIB_REVISION || "v#{Libdatadog::LIB_VERSION}")
     puts "Installing builder (#{info})..."
     system(*install_cmd) || raise("Failed to install builder via cargo")
 

@@ -21,6 +21,20 @@ publishing) with `bundle exec rake gem:package`.
 You can check the file permissions of the built gems with
 `bundle exec rake gem:validate`.
 
+### Prerequisite-aware native build
+
+The current prerelease pins native revision
+`ca48ae899e9b7e2656fa9acfe348bfb790542e0a` and packages it as
+`49.0.0.1.2.pre.ca48ae899e9b`. It includes dependent flag evaluation and the
+C FFI prerequisite result accessors. The build uses Cargo's locked dependencies;
+the packaged gem records the native revision in its metadata.
+
+Run `bundle exec rake libdatadog:build` to build the pinned source.
+`LIBDATADOG_SOURCE` remains an explicit local development override.
+The upstream version updater clears the revision and prerelease suffix when
+advancing to a newer released libdatadog version. Replace the revision pin with
+an approved upstream release before shipping a stable gem.
+
 ## Releasing a new version to rubygems.org
 
 Note: No Ruby needed to run this! It all runs in CI!

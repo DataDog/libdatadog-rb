@@ -4,9 +4,11 @@ module Libdatadog
   # Current libdatadog version
   LIB_VERSION = "49.0.0"
 
+  LIB_REVISION = "ca48ae899e9b7e2656fa9acfe348bfb790542e0a"
+
   GEM_MAJOR_VERSION = "1"
-  GEM_MINOR_VERSION = "1"
-  GEM_PRERELEASE_VERSION = "" # remember to include dot prefix, if needed!
+  GEM_MINOR_VERSION = "2"
+  GEM_PRERELEASE_VERSION = ".pre.ca48ae899e9b" # remember to include dot prefix, if needed!
   private_constant :GEM_MAJOR_VERSION, :GEM_MINOR_VERSION, :GEM_PRERELEASE_VERSION
 
   # The gem version scheme is lib_version.gem_major.gem_minor[.prerelease].

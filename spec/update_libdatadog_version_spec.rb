@@ -14,7 +14,6 @@ RSpec.describe "upstream version updates" do
       .sub(/^  LIB_VERSION = ".*"/, '  LIB_VERSION = "46.0.0"')
       .sub(/^  GEM_MAJOR_VERSION = ".*"/, '  GEM_MAJOR_VERSION = "2"')
       .sub(/^  GEM_MINOR_VERSION = ".*"/, '  GEM_MINOR_VERSION = "3"')
-      .sub(/^  GEM_PRERELEASE_VERSION = ".*"/, '  GEM_PRERELEASE_VERSION = ""')
   end
 
   around do |example|
@@ -46,6 +45,7 @@ RSpec.describe "upstream version updates" do
       expect(status.success?).to be(true), output
       namespace = Module.new
       namespace.module_eval(File.read(version_file), version_file)
+      expect(namespace.const_get(:Libdatadog)::LIB_REVISION).to be_nil
       expect(namespace.const_get(:Libdatadog)::VERSION).to eq("#{version}.0.0")
       expect(File.read(output_file)).to be_empty
     end

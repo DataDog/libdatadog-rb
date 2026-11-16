@@ -20,6 +20,8 @@ Gem::Specification.new do |spec|
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
 
   spec.metadata["homepage_uri"] = spec.homepage
+  spec.metadata["libdatadog_revision"] = Libdatadog::LIB_REVISION if Libdatadog::LIB_REVISION
+
   spec.metadata["source_code_uri"] = "https://github.com/datadog/libdatadog-rb"
 
   # Require releases on rubygems.org to be coming from multi-factor-auth-authenticated accounts

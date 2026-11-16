@@ -44,6 +44,8 @@ fi
 
 sed -i.bak \
   -e "s/^  LIB_VERSION = \".*\"/  LIB_VERSION = \"${VERSION}\"/" \
+  -e 's/^  LIB_REVISION = .*/  LIB_REVISION = nil/' \
+  -e 's/^  GEM_PRERELEASE_VERSION = ".*"/  GEM_PRERELEASE_VERSION = ""/' \
   -e 's/^  GEM_MAJOR_VERSION = ".*"/  GEM_MAJOR_VERSION = "0"/' \
   -e 's/^  GEM_MINOR_VERSION = ".*"/  GEM_MINOR_VERSION = "0"/' \
   "$VERSION_FILE"

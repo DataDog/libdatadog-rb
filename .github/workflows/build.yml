@@ -328,12 +328,8 @@ jobs:
       - name: Read gem version
         id: version
         run: echo "version=$(docker exec publish ruby -e 'require "./lib/libdatadog/version"; print Libdatadog::VERSION')" >> "$GITHUB_OUTPUT"
-      - name: Install pinned publishing tools
-        run: |
-          docker exec publish sh -c '
-            gem install sigstore-cli -v 0.2.3
-            gem install rubygems-await -v 0.5.4
-          '
+      - name: Install pinned signing tool
+        run: docker exec publish gem install sigstore-cli -v 0.2.3
       - name: Push gems with attestation
         # The patch makes `gem push` sign each gem with sigstore-cli and attach
         # the attestation to the upload. GEM_HOST_API_KEY authorizes the push;
@@ -350,11 +346,7 @@ jobs:
               for gem in pkg/*.gem; do gem push "$gem"; done
             '
       - name: Wait for the gems to be available on RubyGems.org
-        run: |
-          docker exec publish sh -c '
-            export PATH="$(ruby -e "print Gem.bindir"):$PATH"
-            rubygems-await pkg/*.gem
-          '
+        run: docker exec publish sh -c 'ruby .github/scripts/await-rubygems-release.rb pkg/*.gem'
       - name: Stop container
         if: always()
         run: docker stop publish || true

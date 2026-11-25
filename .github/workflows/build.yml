@@ -17,7 +17,7 @@ on:
 permissions: {}
 
 env:
-  RUST_VERSION: "1.87.0"
+  RUST_VERSION: "1.91.1"
   CMAKE_VERSION: "3.27.9"
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
             base: ubuntu-24.04
             image: ghcr.io/datadog/images-rb/engines/ruby:4.0-centos-gcc
             rust_target: x86_64-unknown-linux-gnu
-            rust_sha256: 1f6f18ce19387c42968a474cf175e67f99280614ded9c752d5d2e37af3204bcd
+            rust_sha256: 1c955c040dd087e4751d15588ddec288b4208bea16f8ec5046c164877e55fff7
             cmake_arch: x86_64
             cmake_sha256: 72b01478eeb312bf1a0136208957784fe55a7b587f8d9f9142a7fc9b0b9e9a28
           - ruby_platform: x86_64-linux-musl
@@ -41,7 +41,7 @@ jobs:
             base: ubuntu-24.04-arm
             image: ghcr.io/datadog/images-rb/engines/ruby:4.0-centos-gcc
             rust_target: aarch64-unknown-linux-gnu
-            rust_sha256: 2c66e31d774a0dcd4422db74584ebc6362ff3ae90c452caff9d2fb912c821e8d
+            rust_sha256: 50213385f288b8760b2efd54ac066ef9a76475e778cbe3b0fcbd3f898fc00674
             cmake_arch: aarch64
             cmake_sha256: 11bf3d30697df465cdf43664a9473a586f010c528376a966fd310a3a22082461
           - ruby_platform: aarch64-linux-musl
@@ -115,7 +115,7 @@ jobs:
       - name: Tar vendor artifacts
         run: tar cf vendor-${{ matrix.platform.ruby_platform }}.tar vendor/
       - name: Upload vendor artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vendor-${{ matrix.platform.ruby_platform }}
           path: vendor-${{ matrix.platform.ruby_platform }}.tar
@@ -129,12 +129,12 @@ jobs:
           - ruby_platform: arm64-darwin
             base: macos-15
             rust_target: aarch64-apple-darwin
-            rust_sha256: 249496972e6f845f052036b9d7e73f816418412de2b266ec717b9050c1810dc3
+            rust_sha256: f6727c9ab64a5b2a15623f29a023faf0c6a6aeb1347d102b88d595e5c1d9beae
     name: Build (${{ matrix.platform.ruby_platform }})
     runs-on: ${{ matrix.platform.base }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+      - uses: ruby/setup-ruby@be3c7df29b3349ec6bcfc6b4792f1cf9f5237d18 # v1.343.0
         with:
           ruby-version: "4.0"
           bundler-cache: true
@@ -157,7 +157,7 @@ jobs:
       - name: Tar vendor artifacts
         run: tar cf vendor-${{ matrix.platform.ruby_platform }}.tar vendor/
       - name: Upload vendor artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vendor-${{ matrix.platform.ruby_platform }}
           path: vendor-${{ matrix.platform.ruby_platform }}.tar
@@ -176,12 +176,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+      - uses: ruby/setup-ruby@be3c7df29b3349ec6bcfc6b4792f1cf9f5237d18 # v1.343.0
         with:
           ruby-version: "4.0"
           bundler-cache: true
       - name: Download all vendor artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: vendor-*
           merge-multiple: true
@@ -193,7 +193,7 @@ jobs:
       - name: Package gem
         run: bundle exec rake "gem:package[${{ matrix.gem_platform }}]"
       - name: Upload gem
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gem-${{ matrix.gem_platform }}
           path: pkg/*.gem
@@ -225,7 +225,7 @@ jobs:
     runs-on: ${{ matrix.platform.base }}
     steps:
       - name: Download gem
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: gem-${{ matrix.gem_source == 'ruby' && 'ruby' || matrix.platform.gem_platform }}
           path: pkg
@@ -267,11 +267,11 @@ jobs:
     needs: [package]
     runs-on: ${{ matrix.platform.base }}
     steps:
-      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+      - uses: ruby/setup-ruby@be3c7df29b3349ec6bcfc6b4792f1cf9f5237d18 # v1.343.0
         with:
           ruby-version: "4.0"
       - name: Download gem
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: gem-${{ matrix.gem_source == 'ruby' && 'ruby' || matrix.platform.gem_platform }}
           path: pkg
@@ -304,18 +304,23 @@ jobs:
     concurrency: publish
     permissions:
       id-token: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # 1.321.0
+        uses: ruby/setup-ruby@be3c7df29b3349ec6bcfc6b4792f1cf9f5237d18 # 1.343.0
         with:
           ruby-version: "4.0"
           bundler-cache: true
       - run: bundle install
+      - name: Read gem version
+        id: version
+        run: echo "version=$(ruby -e 'require "./lib/libdatadog/version"; print Libdatadog::VERSION')" >> "$GITHUB_OUTPUT"
       - name: Download pre-built gems into pkg/
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: gem-*
           merge-multiple: true
@@ -325,9 +330,38 @@ jobs:
         with:
           scope: DataDog/libdatadog-rb
           policy: self.publish
-      - uses: rubygems/release-gem@7f9650160c1a4e7989fdc9855807bdbd421d8b6b # v1.4.1
+      - uses: rubygems/release-gem@5c53f5308233b7c0f47411f0471b3faae6fa57b2 # v1.4.2
         with:
           token: ${{ steps.octo-sts.outputs.token }}
+
+  notify-consumers:
+    name: Notify consumers
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+    steps:
+      - name: Get GitHub Token via dd-octo-sts
+        id: generate-token
+        uses: DataDog/dd-octo-sts-action@c85802a58e202b7e764b5441e4378c76043c8108 # v1.0.5
+        with:
+          scope: DataDog/dd-trace-rb
+          policy: libdatadog-rb.notify-consumers
+      # There appears to be a race condition in token propagation, wait it out
+      - name: Wait for token propagation
+        run: sleep 30
+      - name: Dispatch to DataDog/dd-trace-rb
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          gh api "repos/DataDog/dd-trace-rb/dispatches" \
+            -f event_type=internal-dep-updated \
+            -f "client_payload[gem]=libdatadog" \
+            -f "client_payload[version]=$VERSION" \
+            -f "client_payload[commit]=${{ github.sha }}" \
+            -f "client_payload[triggered_by]=${{ github.repository }}" \
+            -f "client_payload[source_run_url]=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
   complete:
     name: Build (complete)

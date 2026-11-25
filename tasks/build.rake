@@ -107,7 +107,7 @@ module BuildFromSource
   end
 
   module Builder
-    REQUIRED_EXTRA_FEATURES = %w[otel-thread-ctx].freeze
+    REQUIRED_EXTRA_FEATURES = %w[otel-thread-ctx data-pipeline-external-observations].freeze
 
     class << self
       # Build the cargo install command for the builder crate's `release` binary.
